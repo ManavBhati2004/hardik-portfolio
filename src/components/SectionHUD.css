@@ -1,0 +1,45 @@
+.hud {
+  position: fixed;
+  left: 82.4%;
+  top: 91%;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  gap: 1.6vw;
+  translate: 0 -50%;
+  pointer-events: none;
+  font-family: var(--font-body);
+  font-size: clamp(12px, 0.82vw, 14px);
+  color: var(--bone-muted);
+}
+.hud-count { display: inline-flex; align-items: center; gap: 0.35em; }
+.hud-digits {
+  position: relative;
+  display: inline-block;
+  overflow: hidden;
+  height: 1.3em;
+  line-height: 1.3em;
+  width: 1.4em;
+  color: var(--bone);
+}
+.hud-digit { position: absolute; left: 0; top: 0; }
+.hud-sep, .hud-total { color: var(--smoke); }
+.hud-line {
+  position: relative;
+  width: 4vw;
+  min-width: 48px;
+  height: 1px;
+  background: rgba(234, 231, 226, 0.18);
+  overflow: hidden;
+}
+.hud-line-fill {
+  position: absolute;
+  inset: 0;
+  background: var(--bone);
+  transform-origin: left center;
+  transform: scaleX(0.12);
+}
+
+@media (max-width: 767px) {
+  .hud { left: auto; right: 6vw; top: auto; bottom: 3vh; translate: none; gap: 12px; }
+}

@@ -1,0 +1,95 @@
+.contact {
+  position: relative;
+  min-height: 100vh;
+  min-height: 100svh;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 16vh var(--gutter) 0;
+}
+.contact-grid {
+  display: grid;
+  /* left copy · open centre for the katana · links */
+  grid-template-columns: minmax(0, 1fr) minmax(16vw, 0.7fr) minmax(0, 0.85fr);
+  align-items: center;
+  gap: 2rem;
+  flex: 1;
+}
+.contact-left { grid-column: 1; display: grid; gap: 1.6rem; justify-items: start; }
+.contact-heading {
+  font-size: var(--fs-2xl);
+  font-weight: 300;
+  line-height: 1.02;
+  letter-spacing: 0.01em;
+}
+.contact-heading em { font-style: italic; color: var(--bone-muted); }
+.contact-description { color: var(--bone-muted); max-width: 32ch; }
+
+.contact-links { grid-column: 3; list-style: none; border-top: 1px solid var(--hairline); }
+.contact-links li { border-bottom: 1px solid var(--hairline); }
+.contact-link {
+  display: grid;
+  gap: 0.25rem;
+  padding: 1.15rem 0;
+  min-height: 44px;
+}
+.contact-link-label { font-size: var(--fs-xs); letter-spacing: 0.28em; text-transform: uppercase; color: var(--smoke); }
+.contact-link-value {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  font-family: var(--font-display);
+  font-size: clamp(1.3rem, 1.9vw, 1.9rem);
+  font-weight: 400;
+  color: var(--bone);
+}
+/* slide-through underline: enters from the left, exits to the right */
+.contact-link-text {
+  background: linear-gradient(var(--crimson-glow), var(--crimson-glow)) no-repeat right bottom / 0% 1px;
+  transition: background-size 0.6s var(--ease-out-expo);
+  padding-bottom: 2px;
+}
+.contact-link:hover .contact-link-text,
+.contact-link:focus-visible .contact-link-text {
+  background-position: left bottom;
+  background-size: 100% 1px;
+}
+
+.contact-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  padding: 3rem 0 2.4rem;
+  margin-top: 8vh;
+  border-top: 1px solid var(--hairline);
+  font-size: var(--fs-xs);
+  letter-spacing: 0.14em;
+  color: var(--smoke);
+}
+.contact-footer-kanji { font-family: var(--font-jp); letter-spacing: 0.4em; color: rgba(179, 32, 31, 0.6); }
+.contact-top { min-height: 44px; letter-spacing: 0.14em; color: var(--bone-muted); }
+.contact-top:hover { color: var(--bone); }
+
+@media (max-width: 900px) {
+  .contact-grid { grid-template-columns: 1fr; gap: 3rem; }
+  .contact-links { grid-column: 1; }
+  .contact-left { padding-bottom: 28vh; }
+}
+
+@media (max-width: 767px) {
+  .contact { padding: 14vh 6vw 0; }
+  /* the finale katana rises behind the links on phones: give them a quiet glass panel */
+  .contact-links {
+    padding: 0.4rem 1.1rem;
+    background: rgba(5, 5, 7, 0.62);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1px solid var(--hairline);
+  }
+  .contact-links li:last-child { border-bottom: 0; }
+  .contact-left { padding-bottom: 4vh; }
+  /* leave room under the footer for the fixed 0X / 04 counter */
+  .contact-footer { flex-wrap: wrap; padding-bottom: calc(5.5rem + env(safe-area-inset-bottom, 0px)); }
+}

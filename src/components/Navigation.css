@@ -1,0 +1,172 @@
+/* ── Fixed nav — measured from the 1600×900 reference ── */
+.nav {
+  position: fixed;
+  inset: 0 0 auto 0;
+  z-index: 50;
+  height: 8vh;
+  min-height: 64px;
+  max-height: 84px;
+  display: flex;
+  align-items: center;
+  padding: 0 8.3%;
+  transition: height 0.6s var(--ease-out-expo), background-color 0.6s, backdrop-filter 0.6s;
+}
+.nav::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: linear-gradient(rgba(3, 3, 4, 0.72), rgba(3, 3, 4, 0.35));
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  opacity: 0;
+  transition: opacity 0.6s;
+}
+.nav--compact { height: 64px; }
+.nav--compact::before { opacity: 1; }
+
+.nav-brand {
+  position: absolute;
+  left: 10%;
+  top: 50%;
+  margin-top: -0.6em;
+  font-family: var(--font-jp);
+  font-weight: 300;
+  font-size: clamp(26px, 2.15vw, 36px);
+  line-height: 1.2;
+  color: var(--bone);
+  min-width: 44px;
+  min-height: 44px;
+}
+
+.nav-links {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  translate: -50% -50%;
+  display: flex;
+  align-items: center;
+  gap: clamp(28px, 3.75vw, 64px);
+  list-style: none;
+}
+
+.nav-link {
+  position: relative;
+  min-height: 44px;
+  padding: 0 2px;
+  font-family: var(--font-body);
+  font-size: clamp(13px, 0.9vw, 15px);
+  font-weight: 400;
+  letter-spacing: 0.01em;
+  color: var(--bone-muted);
+  transition: color var(--dur-micro);
+}
+.nav-link:hover, .nav-link.is-active { color: var(--bone); }
+
+/* letter roll: the label duplicates and rolls up one line */
+.roll { position: relative; display: inline-block; overflow: hidden; vertical-align: middle; line-height: 1.4; }
+.roll-inner { display: inline-block; transition: transform 0.55s var(--ease-out-expo); }
+.roll::after {
+  content: attr(data-text);
+  position: absolute;
+  left: 0;
+  top: 100%;
+  transition: transform 0.55s var(--ease-out-expo);
+}
+:is(a, button):hover > .roll .roll-inner,
+:is(a, button):hover > .roll::after { transform: translateY(-100%); }
+
+.nav-underline {
+  position: absolute;
+  left: 0;
+  bottom: 4px;
+  width: 0;
+  height: 1px;
+  background: var(--crimson-glow);
+  opacity: 0;
+  pointer-events: none;
+}
+
+.nav-cta {
+  position: absolute;
+  right: 8.2%;
+  top: 50%;
+  margin-top: -21px;
+  height: 42px;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0 1.7rem;
+  border: 1px solid rgba(234, 231, 226, 0.55);
+  border-radius: 999px;
+  font-size: clamp(13px, 0.9vw, 15px);
+  color: var(--bone);
+  transition: border-color var(--dur-micro), background-color var(--dur-micro);
+}
+.nav-cta:hover { border-color: var(--bone); background: rgba(234, 231, 226, 0.04); }
+
+.nav-menu-btn { display: none; }
+
+/* ── Mobile menu overlay ── */
+.menu {
+  position: fixed;
+  inset: 0;
+  z-index: 45;
+  visibility: hidden;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 0 8vw;
+  background: radial-gradient(circle at 70% 30%, rgba(110, 16, 16, 0.35), transparent 55%), #050507;
+}
+.menu ul { list-style: none; display: grid; gap: 0.6rem; }
+.menu-item button { overflow: hidden; display: block; text-align: left; padding: 0.2rem 0; }
+.menu-item-inner {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 1rem;
+  font-family: var(--font-display);
+  font-weight: 300;
+  font-size: clamp(2.2rem, 10vw, 3.4rem);
+  color: var(--bone);
+}
+.menu-num { font-family: var(--font-body); font-size: 0.75rem; letter-spacing: 0.2em; color: var(--crimson-glow); }
+.menu-kanji {
+  position: absolute;
+  right: 8vw;
+  bottom: 8vh;
+  writing-mode: vertical-rl;
+  font-family: var(--font-jp);
+  font-weight: 300;
+  color: rgba(179, 32, 31, 0.6);
+  letter-spacing: 0.4em;
+}
+
+@media (max-width: 960px) {
+  .nav-links { gap: 22px; }
+  .nav-cta { padding: 0 1.1rem; }
+}
+
+@media (max-width: 767px) {
+  .nav { padding: 0 6vw; }
+  .nav-brand { left: 6vw; }
+  .nav-links, .nav-cta { display: none; }
+  .nav-menu-btn {
+    position: absolute;
+    right: 4vw;
+    top: 50%;
+    margin-top: -22px;
+    width: 44px;
+    height: 44px;
+    display: grid;
+    place-content: center;
+    gap: 7px;
+    z-index: 60;
+  }
+  .nav-menu-btn span { display: block; width: 26px; height: 1px; background: var(--bone); transition: transform 0.5s var(--ease-out-expo); }
+  .nav-menu-btn.is-open span:first-child { transform: translateY(4px) rotate(45deg); }
+  .nav-menu-btn.is-open span:last-child { transform: translateY(-4px) rotate(-45deg); }
+}
+
+/* the shared underline appears with the nav, after the intro */
+.js-intro:not(.intro-done) .nav-underline { visibility: hidden; }

@@ -1,0 +1,87 @@
+.craft { min-height: 100vh; display: flex; align-items: center; }
+.craft-inner {
+  width: 100%;
+  display: grid;
+  grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+  gap: clamp(3rem, 7vw, 8rem);
+  align-items: start;
+}
+.craft-left { position: sticky; top: 18vh; display: grid; gap: 1.6rem; justify-items: start; }
+.craft-kanji {
+  font-family: var(--font-jp);
+  font-weight: 300;
+  font-size: clamp(5rem, 9vw, 8.5rem);
+  line-height: 1;
+  color: rgba(150, 22, 22, 0.55);
+  margin: 0.4rem 0 -0.4rem;
+}
+.craft-heading { font-size: var(--fs-xl); line-height: 1.08; }
+.craft-body { color: var(--bone-muted); max-width: 40ch; }
+.craft-tools { display: flex; align-items: center; gap: 1.2rem; flex-wrap: wrap; padding-top: 0.6rem; }
+.craft-tools-label { font-size: var(--fs-xs); letter-spacing: 0.3em; text-transform: uppercase; color: var(--smoke); }
+.craft-tools ul { list-style: none; display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.craft-tools li {
+  font-size: var(--fs-xs);
+  letter-spacing: 0.06em;
+  padding: 0.45rem 0.9rem;
+  border: 1px solid var(--hairline);
+  border-radius: 999px;
+  color: var(--bone-muted);
+}
+
+.craft-list { list-style: none; border-top: 1px solid var(--hairline); }
+.craft-row {
+  position: relative;
+  overflow: hidden;
+  border-bottom: 1px solid var(--hairline);
+  cursor: default;
+}
+.craft-row:focus-visible { outline: 1px solid var(--crimson-glow); outline-offset: 2px; }
+.craft-row-inner {
+  display: grid;
+  grid-template-columns: 2.8rem 1fr;
+  align-items: baseline;
+  padding: clamp(1rem, 2.4vh, 1.6rem) 0;
+}
+.craft-row-num {
+  font-size: var(--fs-xs);
+  letter-spacing: 0.14em;
+  color: var(--crimson-glow);
+  opacity: 0;
+  transform: translateX(-6px);
+}
+.craft-row-title {
+  display: inline-block;
+  font-family: var(--font-display);
+  font-weight: 300;
+  font-size: clamp(1.7rem, 3.1vw, 3.1rem);
+  line-height: 1.1;
+  color: var(--bone-muted);
+}
+.craft-row-desc {
+  grid-column: 2;
+  overflow: hidden;
+  color: var(--smoke);
+  font-size: var(--fs-sm);
+  max-width: 48ch;
+}
+.craft-row-desc span { display: block; padding-top: 0.5rem; }
+.craft-row-line {
+  position: absolute;
+  left: 0;
+  bottom: -1px;
+  width: 100%;
+  height: 1px;
+  background: var(--crimson);
+  transform: scaleX(0);
+  transform-origin: left center;
+}
+
+@media (hover: none) {
+  .craft-row-num { opacity: 1; transform: none; }
+}
+
+@media (max-width: 900px) {
+  .craft-inner { grid-template-columns: 1fr; }
+  .craft-left { position: static; }
+}

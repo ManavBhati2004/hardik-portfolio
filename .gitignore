@@ -1,0 +1,34 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+node_modules
+dist
+dist-ssr
+*.local
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Heavy source assets (not shipped; one file exceeds GitHub's 100 MB limit)
+assets-src/
+
+# Temporary Chrome profiles used by capture scripts (may contain browser data)
+scripts/chrome_tmp_*
+
+# Local Claude session files
+.claude/
+Claude outputs/

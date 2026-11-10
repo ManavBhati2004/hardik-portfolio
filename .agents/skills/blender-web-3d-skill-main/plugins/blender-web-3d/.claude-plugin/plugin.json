@@ -1,0 +1,31 @@
+{
+  "name": "blender-web-3d",
+  "description": "Build, render, and publish Blender models as stunning, fast Three.js web experiences: headless edit scripts, Blender 5.x recipes, gltf-transform meshopt pipeline, AgX look-dev, custom GLSL shaders and material patches, adaptive quality, runtime batching, baked lightmaps — plus a runnable demo model and viewer template.",
+  "version": "2.0.0",
+  "author": {
+    "name": "Romuald Członkowski",
+    "email": "romuald@aiadvisors.pl",
+    "url": "https://aiadvisors.pl/en"
+  },
+  "homepage": "https://github.com/czlonkowski/blender-web-3d-skill",
+  "repository": "https://github.com/czlonkowski/blender-web-3d-skill",
+  "license": "MIT",
+  "keywords": [
+    "3d",
+    "agent-skills",
+    "agx",
+    "blender",
+    "draco",
+    "glb",
+    "glsl",
+    "gltf",
+    "gltf-transform",
+    "headless",
+    "lightmaps",
+    "meshopt",
+    "rendering",
+    "shaders",
+    "threejs",
+    "web3d"
+  ]
+}

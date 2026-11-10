@@ -1,0 +1,19 @@
+{
+  "name": "blender-web-3d",
+  "owner": {
+    "name": "Romuald Członkowski",
+    "email": "romuald@aiadvisors.pl",
+    "url": "https://aiadvisors.pl/en"
+  },
+  "metadata": {
+    "description": "Build, render, and publish 3D models with headless Blender scripting and Three.js web viewers — a battle-tested skill distilled from a real AI-driven modelling project.",
+    "version": "2.0.0"
+  },
+  "plugins": [
+    {
+      "name": "blender-web-3d",
+      "source": "./plugins/blender-web-3d",
+      "description": "Build, render, and publish Blender models as stunning, fast Three.js web experiences: headless edit scripts, Blender 5.x recipes, gltf-transform meshopt pipeline, AgX look-dev, custom GLSL shaders and material patches, adaptive quality, runtime batching, baked lightmaps — plus a runnable demo model and viewer template."
+    }
+  ]
+}

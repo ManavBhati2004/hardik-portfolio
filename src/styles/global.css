@@ -1,0 +1,218 @@
+@import './tokens.css';
+
+/* ── Reset & base ── */
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+html {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  background: var(--void);
+}
+
+/* Lenis */
+html.lenis, html.lenis body { height: auto; }
+.lenis.lenis-smooth { scroll-behavior: auto !important; }
+.lenis.lenis-smooth [data-lenis-prevent] { overscroll-behavior: contain; }
+.lenis.lenis-stopped { overflow: hidden; }
+.lenis.lenis-scrolling iframe { pointer-events: none; }
+
+body {
+  font-family: var(--font-body);
+  font-size: var(--fs-base);
+  color: var(--bone);
+  background-color: var(--void);
+  overflow-x: hidden;
+  min-height: 100vh;
+  line-height: 1.6;
+}
+
+h1, h2, h3 {
+  font-family: var(--font-display);
+  font-weight: 300;
+  line-height: 1.05;
+  color: var(--bone);
+}
+
+p { color: var(--bone-muted); line-height: 1.7; }
+a { color: inherit; text-decoration: none; }
+button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; }
+img, svg, video { display: block; }
+
+::selection { background: rgba(179, 32, 31, 0.4); color: var(--bone); }
+
+:focus-visible { outline: 1px solid var(--crimson-glow); outline-offset: 4px; }
+:focus:not(:focus-visible) { outline: none; }
+
+.sr-only {
+  position: absolute; width: 1px; height: 1px; overflow: hidden;
+  clip: rect(0 0 0 0); white-space: nowrap;
+}
+
+/* ── Scrollbar ── */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: var(--void); }
+::-webkit-scrollbar-thumb { background: #2a2729; border-radius: 3px; }
+
+/* ── Shared typography ── */
+.eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.9rem;
+  font-family: var(--font-body);
+  font-size: var(--fs-xs);
+  font-weight: 500;
+  letter-spacing: 0.32em;
+  text-transform: uppercase;
+  color: var(--smoke);
+}
+.eyebrow-num { color: var(--crimson-glow); letter-spacing: 0.12em; }
+.eyebrow-kanji {
+  font-family: var(--font-jp);
+  font-weight: 300;
+  font-size: 1.6em;
+  letter-spacing: 0;
+  color: var(--crimson);
+}
+
+.section-heading {
+  font-size: var(--fs-2xl);
+  letter-spacing: 0.02em;
+  font-weight: 300;
+}
+.section-heading em { font-style: italic; color: var(--bone-muted); }
+
+/* Masked line wrapper used by SplitText (y 110% → 0) */
+.line-mask { display: block; overflow: hidden; padding-bottom: 0.08em; margin-bottom: -0.08em; }
+.char-mask { display: inline-block; overflow: hidden; vertical-align: top; }
+
+/* ── Outlined button (reference "Explore the Blade" style) ── */
+.btn-line {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 1.1rem;
+  min-height: 48px;
+  padding: 0 1.6rem;
+  font-family: var(--font-body);
+  font-size: var(--fs-sm);
+  letter-spacing: 0.02em;
+  color: var(--bone);
+  isolation: isolate;
+  overflow: hidden;
+  transition: transform 0.18s var(--ease-out-quart);
+}
+.btn-line:active { transform: scale(0.98); }
+.btn-line-border {
+  position: absolute; inset: 0; width: 100%; height: 100%;
+  pointer-events: none; overflow: visible;
+}
+.btn-line-border rect { width: calc(100% - 1px); height: calc(100% - 1px); fill: none; stroke: var(--hairline-strong); stroke-width: 1; vector-effect: non-scaling-stroke; transition: stroke var(--dur-micro); }
+.btn-line:hover .btn-line-border rect { stroke: rgba(234, 231, 226, 0.85); }
+.btn-line-wash {
+  position: absolute; inset: 0; z-index: -1;
+  background: linear-gradient(90deg, rgba(110, 16, 16, 0.78), rgba(80, 12, 14, 0.6));
+  transform: scaleX(0); transform-origin: left center;
+  transition: transform 0.55s var(--ease-out-expo);
+}
+.btn-line:hover .btn-line-wash, .btn-line:focus-visible .btn-line-wash { transform: scaleX(1); }
+.btn-line-label { display: inline-block; transition: transform 0.45s var(--ease-out-expo); }
+.btn-line:hover .btn-line-label { transform: translateX(2px); }
+
+/* Arrow that slides out right and re-enters from the left */
+.arrow-cycle { position: relative; display: inline-block; overflow: hidden; width: 1.05em; height: 1.2em; line-height: 1.2em; }
+.arrow-cycle > span { position: absolute; inset: 0; display: block; text-align: center; }
+.arrow-cycle > span + span { transform: translateX(-130%); }
+:is(a, button):hover > .arrow-cycle > span,
+:is(a, button):hover .arrow-cycle > span { transition: transform 0.5s var(--ease-out-expo); }
+:is(a, button):hover .arrow-cycle > span:first-child { transform: translateX(130%); }
+:is(a, button):hover .arrow-cycle > span + span { transform: translateX(0); }
+.arrow-cycle--diag > span + span { transform: translate(-130%, 130%); }
+:is(a, button):hover .arrow-cycle--diag > span:first-child { transform: translate(130%, -130%); }
+:is(a, button):hover .arrow-cycle--diag > span + span { transform: translate(0, 0); }
+
+/* ── Ink-bleed masked elements (mask image set from JS) ── */
+.ink {
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-size: 300% 300%;
+  mask-size: 300% 300%;
+}
+
+/* ── Sections ── */
+.section {
+  position: relative;
+  width: 100%;
+  padding: clamp(6rem, 14vh, 10rem) var(--gutter);
+}
+.section-inner { max-width: var(--content-max); margin: 0 auto; }
+
+/* ── Canvas layer ── */
+.canvas-container {
+  position: fixed; inset: 0;
+  width: 100%; height: 100vh; height: 100lvh;
+  z-index: 0;
+  pointer-events: none;
+}
+.canvas-container canvas { pointer-events: auto; }
+
+/* Soft corner vignette in the HTML layer (cheap, matches the reference framing) */
+.vignette {
+  position: fixed; inset: 0; z-index: 1; pointer-events: none;
+  background: radial-gradient(ellipse 85% 80% at 50% 45%, transparent 55%, rgba(0, 0, 0, 0.55) 100%);
+}
+
+/* No-WebGL fallback */
+.canvas-fallback {
+  background:
+    radial-gradient(circle at 47.5% 32%, rgba(120, 18, 18, 0.6) 0, rgba(70, 10, 12, 0.25) 14%, transparent 30%),
+    radial-gradient(ellipse at 50% 100%, rgba(60, 58, 62, 0.35) 0, transparent 55%),
+    linear-gradient(#050506, #0b0a0b 70%, #121012);
+}
+
+/* ── Content overlay ── */
+.content-overlay { position: relative; z-index: 2; }
+
+/* Intro-controlled elements start hidden only when JS motion is running */
+.js-intro [data-intro] { visibility: hidden; }
+
+/* ── Reduced motion: keep layout, drop CSS motion ── */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ── Blade-slash wipe ── */
+.slash { position: fixed; inset: 0; z-index: 90; pointer-events: none; visibility: hidden; }
+.slash-panel { position: absolute; inset: 0; background: #030304; will-change: transform; }
+.slash-panel--a { background: linear-gradient(120deg, #040405, #0a0709); }
+.slash-panel--b { background: linear-gradient(300deg, #040405, #0b0608); }
+.slash-line {
+  position: absolute;
+  left: 0;
+  top: 0;
+  height: 1.5px;
+  transform-origin: 0 50%;
+  background: linear-gradient(90deg, rgba(220, 220, 226, 0), #e6e6ea 18%, #d4302f 62%, rgba(179, 32, 31, 0));
+  box-shadow: 0 0 12px rgba(212, 48, 47, 0.45);
+}
+
+/* ── Dev-only reference overlay (?overlay=1) ── */
+.qa-overlay { position: fixed; inset: 0; z-index: 999; pointer-events: none; opacity: 0.5; background-size: 100% 100%; }
+
+/* ── Phones ── */
+@media (max-width: 767px) {
+  /* copy sits over the live scene: a soft shadow keeps it readable over fog and the moon's reflection */
+  .section p, .contact-description, .craft-row-desc { text-shadow: 0 1px 14px rgba(0, 0, 0, 0.85), 0 0 2px rgba(0, 0, 0, 0.6); }
+  .section { padding-left: 6vw; padding-right: 6vw; }
+}
+
+/* notches / home indicator */
+@supports (padding: env(safe-area-inset-top)) {
+  .nav { top: env(safe-area-inset-top, 0px); }
+  .hud { margin-bottom: env(safe-area-inset-bottom); }
+}

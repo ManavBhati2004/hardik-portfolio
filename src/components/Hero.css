@@ -1,0 +1,227 @@
+/* ─────────────────────────────────────────────────────────────────────────────
+   Hero overlay — percentages are of the viewport (reference 1600×900).
+   Positions use top/left only; GSAP owns transforms on these elements.
+   ───────────────────────────────────────────────────────────────────────────── */
+.hero {
+  position: relative;
+  width: 100%;
+  height: 100vh;
+  height: 100svh;
+  min-height: 560px;
+  overflow: hidden;
+}
+
+/* giant faded 侍: centred ≈ (21%, 34%), ≈ 18vh tall */
+.hero-kanji-giant {
+  position: absolute;
+  left: 21%;
+  top: 34%;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+}
+.hero-kanji-giant span {
+  position: absolute;
+  left: 0;
+  top: 0;
+  translate: -50% -52%;
+  font-family: var(--font-jp);
+  font-weight: 300;
+  font-size: 19.5vh;
+  line-height: 1;
+  color: rgba(150, 22, 22, 0.42);
+  filter: blur(1.2px);
+  white-space: nowrap;
+}
+
+/* left column */
+.hero-copy { position: absolute; inset: 0; pointer-events: none; }
+.hero-copy > * { pointer-events: auto; }
+
+.hero-title {
+  position: absolute;
+  left: 9%;
+  /* baseline ≈ 42% (Cormorant cap height ≈ 0.63em, baseline ≈ 0.8em below the top at lh 1) */
+  top: calc(42% - 0.8em);
+  margin: 0;
+  font-family: var(--font-display);
+  font-weight: 300;
+  font-size: clamp(2.6rem, min(7.4vh, 3.55vw), 6.4rem);
+  line-height: 1;
+  letter-spacing: 0.12em;
+  color: var(--bone);
+  white-space: nowrap;
+}
+
+.hero-subtitle {
+  position: absolute;
+  left: 9.1%;
+  top: calc(47% - 0.75em);
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: clamp(11px, 0.82vw, 14px);
+  letter-spacing: 0.6em;
+  text-transform: uppercase;
+  color: var(--bone-muted);
+  white-space: nowrap;
+  line-height: 1.4;
+}
+
+.hero-rule {
+  position: absolute;
+  left: 9.1%;
+  top: 52%;
+  width: 52px;
+  height: 1px;
+  background: var(--crimson);
+  transform-origin: left center;
+}
+
+.hero-desc {
+  position: absolute;
+  left: 9.1%;
+  top: calc(57.5% - 0.85em);
+  font-family: var(--font-body);
+  font-size: clamp(14px, 1vw, 17px);
+  color: var(--bone-muted);
+  line-height: 1.6;
+  max-width: none;
+  white-space: nowrap;
+}
+
+.hero-cta {
+  position: absolute;
+  left: 9.1%;
+  top: 62.5%;
+}
+.hero-cta .btn-line {
+  height: 5.2vh;
+  min-height: 46px;
+  min-width: clamp(170px, 11.7vw, 230px);
+  justify-content: center;
+}
+
+/* vertical 暁の刃 + line: x ≈ 80.6%, y ≈ 24–34%, line 36.5–44% */
+.hero-vkanji {
+  position: absolute;
+  left: 80.6%;
+  top: 24%;
+  height: 20%;
+  width: 0;
+  pointer-events: none;
+}
+.hero-vkanji-text {
+  position: absolute;
+  left: 0;
+  top: 0;
+  translate: -50% 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75vh;
+  font-family: var(--font-jp);
+  font-weight: 300;
+  font-size: clamp(16px, 2.45vh, 26px);
+  line-height: 1;
+  color: var(--bone-muted);
+}
+.hero-vkanji-text > span { display: block; }
+.hero-vkanji-line {
+  position: absolute;
+  left: 0;
+  top: 62.5%; /* 36.5% of the viewport */
+  width: 1px;
+  height: 37.5%; /* to 44% */
+  background: rgba(234, 231, 226, 0.5);
+  transform-origin: top center;
+}
+
+/* scroll indicator: centred, mouse 84–87%, label 90%, chevrons 93.5% */
+.hero-scroll {
+  position: absolute;
+  left: 50%;
+  top: 83.6%;
+  translate: -50% 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1vh;
+  color: var(--bone-muted);
+  min-width: 44px;
+}
+.hero-scroll-mouse {
+  position: relative;
+  width: 1.15vw;
+  min-width: 15px;
+  max-width: 20px;
+  height: 3.5vh;
+  min-height: 24px;
+  border: 1px solid rgba(234, 231, 226, 0.55);
+  border-radius: 999px;
+}
+.hero-scroll-dot {
+  position: absolute;
+  left: 50%;
+  top: 22%;
+  width: 2px;
+  height: 5px;
+  margin-left: -1px;
+  border-radius: 2px;
+  background: var(--bone);
+  animation: wheel 2.4s var(--ease-in-out) infinite;
+}
+.hero-scroll-label {
+  font-family: var(--font-body);
+  font-size: clamp(12px, 0.85vw, 14px);
+  letter-spacing: 0.02em;
+}
+.hero-scroll-chevrons { display: flex; flex-direction: column; align-items: center; margin-top: -0.2vh; }
+.hero-scroll-chevrons svg {
+  width: 10px;
+  height: 5px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.1;
+  margin-top: -1px;
+  animation: chev 2.4s ease-in-out infinite;
+}
+.hero-scroll-chevrons svg + svg { animation-delay: 0.25s; }
+
+@keyframes wheel {
+  0% { transform: translateY(0); opacity: 0; }
+  20% { opacity: 1; }
+  70% { transform: translateY(9px); opacity: 0; }
+  100% { transform: translateY(9px); opacity: 0; }
+}
+@keyframes chev {
+  0%, 100% { opacity: 0.25; }
+  40% { opacity: 1; }
+}
+
+/* ── tablet: title can wrap is still prevented; tighten ── */
+@media (max-width: 1100px) {
+  .hero-desc { white-space: normal; max-width: 34ch; }
+}
+
+/* ── mobile: stacked layout, sword centred behind the text ── */
+@media (max-width: 767px) {
+  .hero-kanji-giant { left: 30%; top: 30%; }
+  .hero-kanji-giant span { font-size: 15vh; }
+  .hero-title {
+    left: 7vw;
+    top: auto;
+    bottom: 40%;
+    font-size: clamp(2.6rem, 13vw, 4rem);
+    line-height: 1.02;
+    letter-spacing: 0.1em;
+    white-space: normal;
+  }
+  .hero-title-word { display: block; }
+  .hero-subtitle { left: 7vw; top: 61.5%; font-size: 10px; letter-spacing: 0.38em; white-space: normal; max-width: 86vw; line-height: 1.8; }
+  .hero-rule { left: 7vw; top: 68%; }
+  .hero-desc { left: 7vw; top: 70.5%; white-space: normal; max-width: 80vw; font-size: 14px; }
+  .hero-cta { left: 7vw; top: 79%; }
+  .hero-vkanji { left: auto; right: 8vw; top: 19%; height: 15%; }
+  .hero-vkanji-text { font-size: 15px; }
+  .hero-scroll { display: none; }
+}

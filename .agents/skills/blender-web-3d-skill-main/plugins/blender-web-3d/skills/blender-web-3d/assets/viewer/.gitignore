@@ -1,0 +1,5 @@
+node_modules/
+dist/
+public/draco/
+public/basis/
+public/models/*-local.glb

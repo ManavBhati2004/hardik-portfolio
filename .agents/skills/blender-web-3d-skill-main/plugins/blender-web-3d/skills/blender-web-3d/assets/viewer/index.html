@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Orbital Station</title>
+  <meta name="description" content="Interactive real-time 3D viewer — Blender model, Three.js, custom shaders." />
+  <meta name="theme-color" content="#020306" />
+  <!-- preload the model in parallel with the JS bundle: the biggest single win for time-to-first-frame -->
+  <link rel="preload" href="/models/station.glb" as="fetch" type="model/gltf-binary" crossorigin />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/src/style.css" />
+</head>
+<body>
+  <canvas id="scene" aria-label="Interactive 3D model. Drag to orbit, scroll or pinch to zoom."></canvas>
+
+  <header class="brand">
+    <span class="eyebrow">Real-time · WebGL2</span>
+    <h1>Orbital Station</h1>
+    <p>Two counter-rotating habitat rings, 130&nbsp;m. Modelled headless in Blender, rendered live in your browser.</p>
+  </header>
+
+  <aside class="telemetry" id="telemetry" hidden>
+    <div><span>FPS</span><b id="t-fps">–</b></div>
+    <div><span>Draw calls</span><b id="t-calls">–</b></div>
+    <div><span>Triangles</span><b id="t-tris">–</b></div>
+    <div><span>Quality</span><b id="t-tier">–</b></div>
+  </aside>
+
+  <footer class="hint">
+    <span>Drag to orbit</span><span>Scroll to zoom</span><kbd>S</kbd><span>stats</span>
+  </footer>
+
+  <div class="loader" id="loader" role="progressbar" aria-valuemin="0" aria-valuemax="100">
+    <div class="loader-inner">
+      <span class="eyebrow">Loading model</span>
+      <div class="bar"><i id="bar"></i></div>
+    </div>
+  </div>
+
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>
