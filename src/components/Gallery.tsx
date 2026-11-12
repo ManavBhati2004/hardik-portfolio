@@ -5,15 +5,13 @@ import { FRAMES } from '../data/gallery'
 import { setupReveals } from '../motion/sections'
 import { inkHide, inkReveal } from '../motion/inkMask'
 import { sceneStore } from '../scene/store'
-import { BrushStroke, Hanko, kanjiNumeral } from './vintage/Vintage'
 import './Gallery.css'
 
 gsap.registerPlugin(ScrollTrigger)
 
-/* 04 — Gallery: one long hand scroll (emakimono) unrolled sideways. A pinned horizontal
-   track scrubbed by vertical scroll: the paper band carries the mounted frames between
-   two wooden rollers; each picture ink-bleeds in as it enters, captions rise, and a
-   brush stroke shows progress. */
+/* 04 — Gallery: a pinned horizontal track scrubbed by vertical scroll.
+   Frames skew slightly with scroll velocity (Lenis, clamped + damped), each frame
+   ink-bleeds in as it enters, captions rise, and a hairline shows progress. */
 export function Gallery() {
   const rootRef = useRef<HTMLDivElement>(null!)
   const trackRef = useRef<HTMLDivElement>(null!)
@@ -61,6 +59,22 @@ export function Gallery() {
         })
       })
 
+      // velocity skew (separate inner layer: the track owns x, frames own skew)
+      if (!reduced) {
+        const skewers = Array.from(track.querySelectorAll<HTMLElement>('.gal-skew')).map((el) =>
+          gsap.quickTo(el, 'skewX', { duration: 0.6, ease: 'power3.out' })
+        )
+        let last = 0
+        const tick = () => {
+          const v = gsap.utils.clamp(-6, 6, -sceneStore.velocity * 0.18)
+          if (Math.abs(v - last) > 0.02) {
+            last = v
+            skewers.forEach((s) => s(v))
+          }
+        }
+        gsap.ticker.add(tick)
+        return () => gsap.ticker.remove(tick)
+      }
     }, root)
 
     ScrollTrigger.refresh()
@@ -80,27 +94,22 @@ export function Gallery() {
         <h2 className="section-heading" data-reveal="lines">
           Frames <em>from the edit</em>
         </h2>
-        <BrushStroke className="gallery-brush brush--crimson" reveal delay={0.3} />
       </div>
 
       <div className="gallery-track" ref={trackRef}>
-        <span className="gal-paper washi" aria-hidden="true" />
-        <span className="gal-roller gal-roller--start" aria-hidden="true" />
-        <span className="gal-roller gal-roller--end" aria-hidden="true" />
-        {FRAMES.map((f, i) => (
+        {FRAMES.map((f) => (
           <figure key={f.id} className="gal-frame" style={{ ['--ar' as string]: f.aspect }}>
             <div className="gal-skew">
               <div className="gal-media">{f.src ? <img src={f.src} alt={f.caption} loading="lazy" decoding="async" /> : f.art()}</div>
             </div>
             <figcaption className="gal-cap">
-              <span className="gal-cap-num kanji-num" lang="ja" aria-hidden="true">{kanjiNumeral(i + 1)}</span>
+              <span className="gal-cap-num">{f.id}</span>
               <span>{f.caption}</span>
             </figcaption>
           </figure>
         ))}
         <div className="gal-end" aria-hidden="true">
           <span lang="ja">終</span>
-          <Hanko text="景" outline />
         </div>
       </div>
 

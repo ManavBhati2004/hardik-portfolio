@@ -2,7 +2,6 @@ import { useEffect, useRef } from 'react'
 import './Contact.css'
 import { setupReveals } from '../motion/sections'
 import { slashTo } from '../motion/slash'
-import { BrushStroke, Hanko } from './vintage/Vintage'
 
 // TODO: replace with Hardik's real email and profile links
 const LINKS = [
@@ -31,7 +30,6 @@ export function Contact() {
             <br />
             <em>something.</em>
           </h2>
-          <BrushStroke className="contact-brush brush--crimson" reveal delay={0.3} />
           <p className="contact-description" data-reveal="lines">
             Have a project, idea or collaboration in mind? Send a few lines about it.
           </p>
@@ -55,13 +53,9 @@ export function Contact() {
         </ul>
       </div>
 
-      <BrushStroke className="contact-rule" reveal />
       <footer className="contact-footer">
         <span>&copy; {new Date().getFullYear()} Hardik Gehlot</span>
-        <span className="contact-footer-mark">
-          <span lang="ja" className="contact-footer-kanji">暁の刃</span>
-          <Hanko text="刃" reveal delay={0.4} />
-        </span>
+        <span lang="ja" className="contact-footer-kanji">暁の刃</span>
         <button className="contact-top" onClick={() => slashTo('hero')}>
           Back to top ↑
         </button>

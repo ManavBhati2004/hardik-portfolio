@@ -1,5 +1,4 @@
 @import './tokens.css';
-@import './vintage.css';
 
 /* ── Reset & base ── */
 *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
@@ -187,9 +186,20 @@ img, svg, video { display: block; }
   }
 }
 
-/* ── Nav-jump cover (sliding paper doors: see vintage.css) ── */
+/* ── Blade-slash wipe ── */
 .slash { position: fixed; inset: 0; z-index: 90; pointer-events: none; visibility: hidden; }
-.slash-panel { position: absolute; will-change: transform; }
+.slash-panel { position: absolute; inset: 0; background: var(--void); will-change: transform; }
+.slash-panel--a { background: linear-gradient(120deg, var(--void), var(--night)); }
+.slash-panel--b { background: linear-gradient(300deg, var(--void), var(--night)); }
+.slash-line {
+  position: absolute;
+  left: 0;
+  top: 0;
+  height: 1.5px;
+  transform-origin: 0 50%;
+  background: linear-gradient(90deg, rgba(220, 220, 226, 0), #e6e6ea 18%, #d4302f 62%, rgba(179, 32, 31, 0));
+  box-shadow: 0 0 12px rgba(212, 48, 47, 0.45);
+}
 
 /* ── Dev-only reference overlay (?overlay=1) ── */
 .qa-overlay { position: fixed; inset: 0; z-index: 999; pointer-events: none; opacity: 0.5; background-size: 100% 100%; }

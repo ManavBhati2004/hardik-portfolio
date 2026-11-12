@@ -3,19 +3,18 @@ import { gsap } from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import { PROJECTS, type Project } from '../data/projects'
 import { sceneStore } from '../scene/store'
-import { setupReveals, unrollOnScroll } from '../motion/sections'
-import { BrushStroke, Hanko, kanjiNumeral } from './vintage/Vintage'
+import { setupReveals } from '../motion/sections'
+import { inkHide, inkReveal } from '../motion/inkMask'
 import { ProjectOverlay } from './ProjectOverlay'
 import './SelectedWork.css'
 
 gsap.registerPlugin(ScrollTrigger)
 
 /* ─────────────────────────────────────────────────────────────────────────────
-   Project card — a hanging scroll (kakejiku): cord, top rod, paper mount with brocade
-   strips around the picture, title block with a seal, bottom roller.
-   It unrolls when it enters; hover runs ONE GSAP timeline per card (image scale inside
-   the clip, overlay, view indicator, title shift, seal press, a slow sway from the
-   hanging point) plus a quickTo pointer parallax on a separate inner layer.
+   Project card — all hover motion runs through ONE GSAP timeline per card
+   (image scale inside the clip, overlay, view indicator, title/category shift,
+   crimson hairline frame draw) plus a quickTo pointer parallax on a separate
+   inner layer, so no two systems ever animate the same property.
    ───────────────────────────────────────────────────────────────────────────── */
 function WorkCard({
   project,
@@ -40,18 +39,16 @@ function WorkCard({
     const q = gsap.utils.selector(card)
 
     const ctx = gsap.context(() => {
+      const rect = q('.work-card-frame rect')
+      gsap.set(rect, { strokeDasharray: 1, strokeDashoffset: 1 })
       const tl = gsap.timeline({ paused: true, defaults: { ease: 'power3.out' } })
       tl.to(mediaRef.current, { scale: reduced ? 1 : 1.045, duration: 0.9 }, 0)
         .to(q('.work-card-overlay'), { opacity: 1, duration: 0.6, ease: 'power2.out' }, 0)
         .fromTo(q('.work-card-view'), { opacity: 0, y: 12 }, { opacity: 1, y: 0, duration: 0.55 }, 0.08)
-        .to(q('.work-card-title'), { x: reduced ? 0 : 6, color: '#a3201a', duration: 0.6 }, 0.02)
-        .to(q('.work-card-cat'), { x: reduced ? 0 : 6, duration: 0.6 }, 0.06)
-
-      // a hanging scroll stirred by the hand: slow sway from the cord, never looping
-      const sway = gsap.timeline({ paused: true })
-      if (!reduced) {
-        sway.to(card, { keyframes: [{ rotation: 0.5, duration: 0.7 }, { rotation: -0.3, duration: 0.9 }, { rotation: 0, duration: 0.9 }], ease: 'sine.inOut', transformOrigin: '50% 0%' })
-      }
+        .to(rect, { strokeDashoffset: 0, duration: 0.9, ease: 'power2.inOut' }, 0)
+        .to(q('.work-card-title'), { x: reduced ? 0 : 6, color: '#ffffff', duration: 0.6 }, 0.02)
+        .to(q('.work-card-cat'), { x: reduced ? 0 : 6, color: '#c9a9a6', duration: 0.6 }, 0.06)
+        .to(q('.work-card-arrow'), { x: reduced ? 0 : 4, opacity: 1, duration: 0.5 }, 0.04)
 
       const px = gsap.quickTo(parallaxRef.current, 'x', { duration: 0.8, ease: 'power3.out' })
       const py = gsap.quickTo(parallaxRef.current, 'y', { duration: 0.8, ease: 'power3.out' })
@@ -76,7 +73,6 @@ function WorkCard({
 
       const enter = () => {
         tl.timeScale(1).play()
-        if (!sway.isActive()) sway.restart()
         startVideo()
       }
       const leave = () => {
@@ -101,14 +97,18 @@ function WorkCard({
       card.addEventListener('focusin', enter)
       card.addEventListener('focusout', leave)
 
-      /* entrance: the scroll unrolls, the title block settles, the seal is pressed */
-      const info = q('.work-card-index, .work-card-meta')
-      const seal = q('.work-card-seal')
-      gsap.set(info, { opacity: 0, y: reduced ? 0 : 12 })
-      gsap.set(seal, { opacity: 0, scale: reduced ? 1 : 1.7, rotation: reduced ? -4 : -16 })
-      unrollOnScroll(card, (index % 2) * 0.14, () => {
-        gsap.to(info, { opacity: 1, y: 0, duration: 1.1, ease: 'expo.out', stagger: 0.1 })
-        gsap.to(seal, { opacity: 1, scale: 1, rotation: -4, duration: 0.45, ease: 'power4.in', delay: 0.55 })
+      /* entrance: organic ink-bleed on the thumbnail, then the info rises */
+      const corner = index % 2 === 0 ? 'tl' : 'tr'
+      if (!reduced) inkHide(thumbRef.current, corner)
+      gsap.set(q('.work-card-info > *'), { opacity: 0, y: reduced ? 0 : 16 })
+      ScrollTrigger.create({
+        trigger: card,
+        start: 'top 85%',
+        once: true,
+        onEnter: () => {
+          inkReveal(thumbRef.current, { from: corner, duration: 1.7, delay: (index % 2) * 0.12 })
+          gsap.to(q('.work-card-info > *'), { opacity: 1, y: 0, duration: 1, ease: 'expo.out', stagger: 0.08, delay: 0.45 + (index % 2) * 0.12 })
+        },
       })
 
       return () => {
@@ -125,7 +125,7 @@ function WorkCard({
   }, [index])
 
   return (
-    <article ref={cardRef} className={`work-card kake${featured ? ' work-card--featured' : ''}`}>
+    <article ref={cardRef} className={`work-card${featured ? ' work-card--featured' : ''}`}>
       <a
         className="work-card-link"
         href={project.href ?? '#work'}
@@ -135,10 +135,6 @@ function WorkCard({
           onOpen(project, thumbRef.current)
         }}
       >
-        <span className="kake-cord" aria-hidden="true" />
-        <span className="scroll-rod scroll-rod--slim" aria-hidden="true" />
-        <div className="kake-body washi" data-unroll-body>
-        <span className="brocade" aria-hidden="true" />
         <div className="work-card-thumb" ref={thumbRef}>
           <div className="work-card-media" ref={mediaRef}>
             <div className="work-card-parallax" ref={parallaxRef}>
@@ -170,12 +166,14 @@ function WorkCard({
             </span>
             <span className="work-card-view-label">View project</span>
           </div>
+          <svg className="work-card-frame" preserveAspectRatio="none" aria-hidden="true">
+            <rect x="0.5" y="0.5" pathLength={1} />
+          </svg>
         </div>
-        <span className="brocade" aria-hidden="true" />
 
         <div className="work-card-info">
-          <span className="work-card-index kanji-num" lang="ja" aria-hidden="true">
-            {kanjiNumeral(index + 1)}
+          <span className="work-card-index" aria-hidden="true">
+            {String(index + 1).padStart(2, '0')}
           </span>
           <div className="work-card-meta">
             <h3 className="work-card-title">{project.title}</h3>
@@ -184,10 +182,10 @@ function WorkCard({
               {project.year && <span className="work-card-year"> · {project.year}</span>}
             </span>
           </div>
-          <Hanko text="作" className="work-card-seal" />
+          <span className="work-card-arrow" aria-hidden="true">
+            →
+          </span>
         </div>
-        </div>
-        <span className="scroll-rod" data-unroll-rod aria-hidden="true" />
       </a>
     </article>
   )
@@ -231,7 +229,6 @@ export function SelectedWork() {
             <h2 className="section-heading" data-reveal="lines">
               Selected <em>work</em>
             </h2>
-            <BrushStroke className="work-brush brush--crimson" reveal delay={0.3} />
           </div>
           <p className="work-intro" data-reveal="lines">
             A space for finished pieces. Each card below is a placeholder until the real films are added.

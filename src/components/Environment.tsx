@@ -6,8 +6,9 @@ import { TORII_XZ, WATER_Y } from '../scene/config'
 
 
 /* ───────────────────────────────────────────────────────────────────────────
-   Uploaded Torii model on the far-right cliff (existing feature kept).
-   It is planted on the actual rock surface by raycasting down onto the cliff.
+   Myōjin torii (built in Blender: scripts/blender/build_torii.py) on the
+   far-right cliff. It is planted on the actual rock surface by raycasting
+   down onto the cliff.
    ─────────────────────────────────────────────────────────────────────────── */
 function ToriiShrineModel({ groundName }: { groundName: string }) {
   const { scene } = useGLTF('/models/torii.opt.glb')
@@ -30,6 +31,10 @@ function ToriiShrineModel({ groundName }: { groundName: string }) {
         } else if (name.includes('stone') || name.includes('feet')) {
           mat.color = new THREE.Color('#3a3a3e')
           mat.roughness = 0.9
+        } else if (name.includes('plaque')) {
+          // the blank gakuzuka plaque: dark weathered wood inside its black frame
+          mat.color = new THREE.Color('#1c1612')
+          mat.roughness = 0.8
         } else {
           // weathered vermilion lacquer, kept dark so it sits in the night
           mat.color = new THREE.Color('#6a120e')
@@ -78,7 +83,7 @@ const ROCKS: RockPlacement[] = [
   { model: 'cliff', position: [16, WATER_Y - 0.4, -17], rotation: [0, -2.4, 0], scale: 0.22, tone: 0.41 },
   // right foreground slab
   { model: 'boulder02', position: [3.0, WATER_Y - 0.24, 0.8], rotation: [0, 2.85, 0], scale: [1.9, 0.62, 1.3], tone: 0.61 },
-  // (the close-up boulders use the cleaner namaqualand scan: the low-res boulder_01 speckled up close)
+  // (the close-up boulders cycle through the boulder variants, see ROCK_FILES in Rocks.tsx)
   { model: 'boulder02', position: [1.35, WATER_Y - 0.12, 3.0], rotation: [0, 1.2, 0], scale: [0.36, 0.2, 0.3], tone: 0.57 },
   // left foreground group
   { model: 'coast05', position: [-3.9, WATER_Y - 0.32, 2.4], rotation: [0, -0.6, 0], scale: [0.72, 0.4, 0.72], tone: 0.54 },

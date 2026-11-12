@@ -51,6 +51,8 @@ export interface SceneStore {
   katanaSink: number
   /** Katana finale rise at Contact 0 → 1. */
   katanaFinale: number
+  /** One-shot splash on the water (world x / z, strength; consumed and zeroed by Water). */
+  splash: { x: number; z: number; strength: number }
 
   /** Theme: 0 night, 1 day (written by theme/theme.ts; flips under the ink overlay). */
   day: number
@@ -97,6 +99,7 @@ export const sceneStore: SceneStore = {
   katanaRise: 0,
   katanaSink: 0,
   katanaFinale: 0,
+  splash: { x: 0, z: 0, strength: 0 },
 
   day: 0,
   loadProgress: 0,

@@ -381,6 +381,15 @@ export function Water({ cursorRef }: WaterProps) {
       drop.set(tipU + (Math.random() - 0.5) * 0.01, tipV, 0.006, 0.01)
     }
 
+    /* one-shot splash (the saya falling back into the water) */
+    const sp = sceneStore.splash
+    if (sp.strength > 0) {
+      const su = (sp.x - RIPPLE_MIN.x) / RIPPLE_SIZE.x
+      const sv = (sp.z - RIPPLE_MIN.y) / RIPPLE_SIZE.y
+      if (su > 0 && su < 1 && sv > 0 && sv < 1 && !sceneStore.reducedMotion) drop2.set(su, sv, sp.strength, 0.022)
+      sp.strength = 0
+    }
+
     /* fixed-step simulation (60 Hz) */
     tmp.acc += dt
     let steps = 0

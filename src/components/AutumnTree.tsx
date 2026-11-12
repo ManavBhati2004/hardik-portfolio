@@ -10,12 +10,14 @@ import { FallingPetals } from './FallingPetals'
 import { pointAtNdc, isMobileViewport, heroCamera } from '../scene/placement'
 
 /* ─────────────────────────────────────────────────────────────────────────────
-   Flowering branch entering from the upper-left (model built in Blender:
-   scripts/blender/build_blossom_branch.py — swept bark with Poly Haven bark
-   PBR maps, modelled five-petal blossoms, buds and stamens).
+   Cherry tree on the left shore (model built in Blender: scripts/blender/build_sakura.py —
+   recursive curve trunk/branches converted to mesh, baked procedural cherry bark).
+   Its trunk and crown stay outside the hero frame; one long limb (the model origin is
+   where it leaves the trunk) enters from the upper-left and frames the hero. Blossoms and
+   buds are instanced on the twig tips (`_twig_tip` vertex weight).
 
    Wind is applied per-vertex, not to the whole object:
-   - sway weight = (distance from the root)² → the main limb barely moves,
+   - sway weight = (distance past the trunk fork)² → trunk and limbs barely move,
      outer twigs and blossom clusters move more
    - phase comes from the vertex's own position, so the motion is continuous
      across joints (twigs never detach) and travels along the branch like a gust
@@ -146,17 +148,38 @@ function injectInstancedWind(
   mat.customProgramCacheKey = () => 'blossom-instanced-wind'
 }
 
-/** Sample outer-twig points on the bark and build flower / bud instances there. */
+/** Sample the twig tips (the model's `_twig_tip` weight) and build flower / bud instances there. */
 function buildBlossomInstances(bark: THREE.BufferGeometry, count: number, seed: number) {
   const pos = bark.getAttribute('position') as THREE.BufferAttribute
   const nor = bark.getAttribute('normal') as THREE.BufferAttribute | undefined
   const wind = bark.getAttribute('windData') as THREE.BufferAttribute
+  const tip = bark.getAttribute('_twig_tip') as THREE.BufferAttribute | undefined
   let s = seed
   const rnd = () => ((s = (s * 16807) % 2147483647) - 1) / 2147483646
-  // candidate vertices: outer twigs (high sway weight)
+  // candidate vertices on the flowering twigs, weighted by how far out on the twig they are;
+  // the hero limb (right of the trunk fork, +x) is weighted up so the bough framing the hero
+  // keeps its dense clusters
   const cand: number[] = []
-  for (let i = 0; i < pos.count; i++) if (wind.getX(i) > 0.42) cand.push(i)
-  if (cand.length === 0) for (let i = 0; i < pos.count; i += 7) cand.push(i)
+  const cum: number[] = []
+  let total = 0
+  for (let i = 0; i < pos.count; i++) {
+    const t = tip ? tip.getX(i) : wind.getX(i) > 0.42 ? 1 : 0
+    if (t < 0.3) continue
+    total += t * (pos.getX(i) > 0.25 ? 5 : 1)
+    cand.push(i)
+    cum.push(total)
+  }
+  const pick = () => {
+    const r = rnd() * total
+    let lo = 0
+    let hi = cum.length - 1
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1
+      if (cum[mid] < r) lo = mid + 1
+      else hi = mid
+    }
+    return cand[lo]
+  }
 
   const matrices: THREE.Matrix4[] = []
   const colors: THREE.Color[] = []
@@ -170,7 +193,7 @@ function buildBlossomInstances(bark: THREE.BufferGeometry, count: number, seed: 
   const white = new THREE.Color(1.0, 0.96, 0.97)
   const deep = new THREE.Color(0.92, 0.52, 0.62)
   for (let k = 0; k < count; k++) {
-    const i = cand[Math.floor(rnd() * cand.length)]
+    const i = pick()
     p.fromBufferAttribute(pos, i)
     if (nor) n.fromBufferAttribute(nor, i).normalize()
     else n.set(rnd() - 0.5, rnd() - 0.5, 1).normalize()
@@ -193,10 +216,11 @@ function buildBlossomInstances(bark: THREE.BufferGeometry, count: number, seed: 
   return { matrices, colors, windData }
 }
 
-const EXTRA_BLOSSOMS = 150
+const BLOSSOMS = 3200
+const BLOSSOMS_MOBILE = 1600
 
 export function BlossomBranch() {
-  const { scene } = useGLTF('/models/blossom_branch.opt.glb')
+  const { scene } = useGLTF('/models/sakura.glb')
   const size = useThree((s) => s.size)
   const gl = useThree((s) => s.gl)
   const groupRef = useRef<THREE.Group>(null!)
@@ -204,98 +228,37 @@ export function BlossomBranch() {
 
   const uniforms = useMemo(() => ({ uTime: { value: 0 }, uWind: { value: 1 }, uDay: { value: 0 } }), [])
 
-  const parts = useMemo(() => {
+  const bark = useMemo(() => {
     const maxAniso = gl.capabilities.getMaxAnisotropy()
-    const out: { geometry: THREE.BufferGeometry; material: THREE.Material; name: string }[] = []
+    let mesh: THREE.Mesh | null = null
     scene.traverse((o) => {
-      const m = o as THREE.Mesh
-      if (!m.isMesh) return
-      const src = m.material as THREE.MeshStandardMaterial
-      const geometry = takeWindData(bakeGeometry(m, scene))
-      const name = (m.name || src.name || '').toLowerCase()
-      let material: THREE.MeshStandardMaterial
-
-      if (name.includes('bark')) {
-        material = new THREE.MeshStandardMaterial({
-          map: src.map,
-          normalMap: src.normalMap,
-          roughnessMap: src.roughnessMap,
-          color: new THREE.Color(0.2, 0.15, 0.13),
-          roughness: 1,
-          metalness: 0,
-          normalScale: new THREE.Vector2(1.4, 1.4),
-          envMapIntensity: 0.6,
-        })
-        injectWind(material, uniforms)
-      } else if (name.includes('stamen')) {
-        material = new THREE.MeshStandardMaterial({
-          map: src.map,
-          color: new THREE.Color(0.9, 0.8, 0.8),
-          roughness: 0.6,
-          metalness: 0,
-          side: THREE.DoubleSide,
-          envMapIntensity: 0.5,
-        })
-        injectWind(material, uniforms)
-      } else {
-        // petals: textured, per-blossom tint (pale rose → deep crimson), soft sheen and
-        // back-lit translucency from the moon behind
-        const petal = new THREE.MeshPhysicalMaterial({
-          map: src.map,
-          color: new THREE.Color(1, 1, 1),
-          roughness: 0.62,
-          metalness: 0,
-          sheen: 0.6,
-          sheenColor: new THREE.Color('#f3b8c0'),
-          sheenRoughness: 0.5,
-          side: THREE.DoubleSide,
-          envMapIntensity: 0.55,
-        })
-        material = petal
-        injectWind(material, uniforms, (shader) => {
-          shader.uniforms.uMoonPos = { value: MOON_POSITION.clone() }
-          shader.vertexShader = shader.vertexShader
-            .replace('#include <common>', '#include <common>\n varying vec3 vPetalWorld;')
-            .replace(
-              '#include <worldpos_vertex>',
-              '#include <worldpos_vertex>\n vPetalWorld = (modelMatrix * vec4(transformed, 1.0)).xyz;'
-            )
-          shader.fragmentShader = shader.fragmentShader
-            .replace('#include <common>', '#include <common>\n varying vec3 vPetalWorld;\n uniform vec3 uMoonPos;')
-            .replace(
-              '#include <map_fragment>',
-              `#include <map_fragment>
-               // per-blossom tint: soft blush pink → near-white, a few deeper pink (no saturated red)
-               float r = vWindData.b;
-               vec3 tintA = vec3(1.0, 0.78, 0.83);
-               vec3 tintB = vec3(0.92, 0.5, 0.6);
-               vec3 tintC = vec3(1.0, 0.95, 0.96);
-               vec3 tint = r < 0.62 ? mix(tintB, tintA, r / 0.62) : mix(tintA, tintC, (r - 0.62) / 0.38);
-               diffuseColor.rgb *= tint;`
-            )
-            .replace(
-              '#include <emissivemap_fragment>',
-              `#include <emissivemap_fragment>
-               // thin-petal translucency: moonlight seen through the petals
-               vec3 toMoon = normalize(uMoonPos - vPetalWorld);
-               vec3 toCamW = normalize(cameraPosition - vPetalWorld);
-               float back = pow(clamp(dot(-toCamW, toMoon), 0.0, 1.0), 3.0);
-               totalEmissiveRadiance += diffuseColor.rgb * vec3(0.62, 0.22, 0.26) * (0.06 + back * 0.32);`
-            )
-        })
-      }
-      for (const t of [material.map, material.normalMap, material.roughnessMap]) if (t) t.anisotropy = maxAniso
-      out.push({ geometry, material, name })
+      if (!mesh && (o as THREE.Mesh).isMesh) mesh = o as THREE.Mesh
     })
-    return out
+    if (!mesh) return null
+    const m = mesh as THREE.Mesh
+    const src = m.material as THREE.MeshStandardMaterial
+    const geometry = takeWindData(bakeGeometry(m, scene))
+    const material = new THREE.MeshStandardMaterial({
+      map: src.map,
+      normalMap: src.normalMap,
+      roughnessMap: src.roughnessMap,
+      color: new THREE.Color(0.2, 0.15, 0.13),
+      roughness: 1,
+      metalness: 0,
+      normalScale: new THREE.Vector2(1.4, 1.4),
+      envMapIntensity: 0.6,
+    })
+    injectWind(material, uniforms)
+    for (const t of [material.map, material.normalMap, material.roughnessMap]) if (t) t.anisotropy = maxAniso
+    return { geometry, material }
   }, [scene, uniforms, gl])
 
-  // denser clusters: instanced blossoms and buds along the outer twigs
-  const extra = useMemo(() => {
-    const bark = parts.find((p) => p.name.includes('bark'))
+  // blossoms and buds instanced on the twig tips of the whole tree
+  const blossoms = useMemo(() => {
     if (!bark) return null
     const geo = flowerGeometry()
-    const { matrices, colors, windData } = buildBlossomInstances(bark.geometry, EXTRA_BLOSSOMS, 9173)
+    const count = isMobileViewport() ? BLOSSOMS_MOBILE : BLOSSOMS
+    const { matrices, colors, windData } = buildBlossomInstances(bark.geometry, count, 9173)
     geo.setAttribute('windData', new THREE.InstancedBufferAttribute(windData, 4))
     const mat = new THREE.MeshPhysicalMaterial({
       vertexColors: true,
@@ -318,9 +281,11 @@ export function BlossomBranch() {
     mesh.frustumCulled = false
     mesh.receiveShadow = true
     return mesh
-  }, [parts, uniforms])
+  }, [bark, uniforms])
 
-  // Composition: root just outside the upper-left corner, bough reaching right and down
+  // Composition: the hero limb's root (the model origin, where it leaves the trunk) sits just
+  // outside the upper-left corner with the bough reaching right and down; the trunk drops
+  // off-screen to the left shore and the crown spreads up and left, out of the hero frame
   // (against the fixed hero camera so the live camera journey never re-places it)
   useLayoutEffect(() => {
     const mobile = isMobileViewport()
@@ -329,17 +294,15 @@ export function BlossomBranch() {
     groupRef.current.position.copy(p)
   }, [size])
 
-  // intro / journey offset layer: eases in from beyond the corner, drifts out while the
-  // camera travels, and drifts back for the finale
+  // intro offset layer: the bough eases in from beyond the corner. The tree is planted, so it
+  // stays put during the camera journey (the camera passes under the crown).
   const drift = useRef(1)
   useFrame((_, rawDelta) => {
     const delta = Math.min(rawDelta, 0.05)
     uniforms.uTime.value += delta * ambientMotion()
     uniforms.uDay.value = sceneStore.day
-    const t = sceneStore.cameraT
-    const journeyAway = THREE.MathUtils.smoothstep(t, 0.05, 0.9) * (1 - THREE.MathUtils.smoothstep(t, 3.25, 3.95))
-    const target = Math.max(1 - sceneStore.branchIn, journeyAway)
-    // the intro owns branchIn with its own easing; the journey part is damped here
+    const target = 1 - sceneStore.branchIn
+    // the intro owns branchIn with its own easing; afterwards changes are damped here
     drift.current = sceneStore.introDone ? THREE.MathUtils.damp(drift.current, target, 2.2, delta) : target
     const a = drift.current
     offsetRef.current.position.set(-1.6 * a, 1.1 * a, 0)
@@ -351,10 +314,10 @@ export function BlossomBranch() {
     <group ref={groupRef}>
       <group ref={offsetRef}>
         <group rotation={[0.12, 0.35, 0.16]} scale={mobile ? 0.4 : 0.6}>
-          {parts.map((p, i) => (
-            <mesh key={i} geometry={p.geometry} material={p.material} receiveShadow castShadow={false} frustumCulled={false} />
-          ))}
-          {extra && <primitive object={extra} />}
+          {bark && (
+            <mesh geometry={bark.geometry} material={bark.material} receiveShadow castShadow={false} frustumCulled={false} />
+          )}
+          {blossoms && <primitive object={blossoms} />}
         </group>
         <FallingPetals />
       </group>
@@ -362,6 +325,6 @@ export function BlossomBranch() {
   )
 }
 
-useGLTF.preload('/models/blossom_branch.opt.glb')
+useGLTF.preload('/models/sakura.glb')
 
 export default BlossomBranch

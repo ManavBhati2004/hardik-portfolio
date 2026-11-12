@@ -11,7 +11,6 @@ import { Preloader } from './components/Preloader'
 import { useScrollProgress } from './hooks/useScrollProgress'
 import { useCursorMotion } from './hooks/useCursorMotion'
 import { setupSections } from './motion/sections'
-import { VintageDefs } from './components/vintage/Vintage'
 
 // three.js + the scene are the heavy part: split them into their own chunk;
 // the preloader (pure HTML + the mist veil) masks the load.
@@ -85,7 +84,6 @@ export default function App() {
         </section>
       </main>
 
-      <VintageDefs />
       <Preloader webgl={webgl} />
       <QaOverlay />
     </>

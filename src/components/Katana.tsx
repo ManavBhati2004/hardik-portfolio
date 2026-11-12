@@ -2,7 +2,6 @@ import { useRef, useMemo, useLayoutEffect } from 'react'
 import { useFrame, useThree } from '@react-three/fiber'
 import * as THREE from 'three'
 import { useGLTF } from '@react-three/drei'
-import { KatanaTassel } from './KatanaTassels'
 import { onSceneEvent, sceneStore } from '../scene/store'
 import { pointAtNdc, isMobileViewport, heroCamera, pctToNdc } from '../scene/placement'
 import { CAMERA_FOV, CAMERA_PATH, HERO_LAYOUT, KATANA_DISTANCE, WATER_Y } from '../scene/config'
@@ -13,13 +12,15 @@ export interface KatanaProps {
   cursorRef: CursorRef
 }
 
-/** Uploaded katana; textures resized to 2K for the web (source kept in assets-src/). */
-const KATANA_URL = '/models/katana.opt.glb'
+/** The two katanas, exported from the user's .blend files (scripts/blender/export_katanas.py):
+    black lacquer by night, white lacquer by day. Each has a "Sword" and a "Saya" node. */
+const KATANA_URLS = { dark: '/models/katana_dark.opt.glb', light: '/models/katana_light.opt.glb' } as const
+type KatanaKind = keyof typeof KATANA_URLS
 /** Uniform model scale — fixed, never animated. */
 const SWORD_SCALE = 3.3
 /** Model-space blade extent (+Y from the tsuba) and handle length (−Y). */
-const BLADE_Y = 0.696
-const HANDLE_Y = 0.307
+const BLADE_Y = 0.699
+const HANDLE_Y = 0.309
 const BLADE_LEN = BLADE_Y * SWORD_SCALE
 /** Rotation (rad) around the blade axis per viewport of scroll. */
 const TURN_PER_VIEWPORT = Math.PI * 1.15
@@ -63,51 +64,55 @@ function addBladeGradient(mat: THREE.MeshPhysicalMaterial) {
   mat.customProgramCacheKey = () => 'katana-blade-gradient'
 }
 
-/* ─── The uploaded antique katana with its own PBR texture maps ─── */
-function AntiqueKatanaModel() {
-  const { scene } = useGLTF(KATANA_URL)
-  const gl = useThree((s) => s.gl)
+/* ─── One katana model: its authored materials, tuned for the scene's lighting ─── */
+interface KatanaParts {
+  root: THREE.Object3D
+  saya: THREE.Object3D | null
+}
 
-  const clonedScene = useMemo(() => {
-    const clone = scene.clone(true)
+function useKatanaModel(kind: KatanaKind): KatanaParts {
+  const { scene } = useGLTF(KATANA_URLS[kind])
+  const gl = useThree((s) => s.gl)
+  return useMemo(() => {
+    const root = scene.clone(true)
     const maxAniso = gl.capabilities.getMaxAnisotropy()
-    clone.traverse((child) => {
+    root.traverse((child) => {
       const mesh = child as THREE.Mesh
       if (!mesh.isMesh) return
+      // the pommel chain is modelled as a straight line along the handle: with the handle up it
+      // would stand stiffly upward, so it is left out
+      if (/chain/i.test(mesh.name)) {
+        mesh.visible = false
+        return
+      }
       mesh.castShadow = true
       mesh.receiveShadow = true
-      const src = mesh.material as THREE.MeshStandardMaterial
-      const mat = new THREE.MeshPhysicalMaterial({
-        map: src.map,
-        normalMap: src.normalMap,
-        metalnessMap: src.metalnessMap,
-        roughnessMap: src.roughnessMap,
-        color: new THREE.Color(1, 1, 1),
-        metalness: 1.0,
-        roughness: 1.0,
-        envMapIntensity: 4.4,
-        normalScale: new THREE.Vector2(1, 1),
-        side: src.side,
-        // brushed-steel streak along the blade
-        anisotropy: 0.35,
-        anisotropyRotation: Math.PI / 2,
-        specularIntensity: 1,
-      })
+      const src = mesh.material as THREE.MeshPhysicalMaterial
+      const mat = (src.isMeshPhysicalMaterial ? src.clone() : new THREE.MeshPhysicalMaterial().copy(src)) as THREE.MeshPhysicalMaterial
       for (const tex of [mat.map, mat.normalMap, mat.metalnessMap, mat.roughnessMap]) {
         if (tex) tex.anisotropy = maxAniso
       }
-      addBladeGradient(mat)
+      const isBlade = /blade/i.test(mesh.name) || /steel/i.test(src.name)
+      if (isBlade) {
+        // polished steel: brushed streak along the blade, crimson toward the tip by night
+        mat.envMapIntensity = 4.4
+        mat.anisotropy = 0.35
+        mat.anisotropyRotation = Math.PI / 2
+        addBladeGradient(mat)
+      } else if (mat.metalness > 0.5) {
+        mat.envMapIntensity = 2.6 // gold fittings, chain
+      } else {
+        // lacquer and silk: a clear lacquer coat on the hard parts, soft silk on the wraps
+        mat.envMapIntensity = 1.4
+        if (mat.roughness < 0.3) {
+          mat.clearcoat = 0.6
+          mat.clearcoatRoughness = 0.08
+        }
+      }
       mesh.material = mat
     })
-    return clone
+    return { root, saya: root.getObjectByName('Saya') ?? null }
   }, [scene, gl])
-
-  // Model origin is at the guard (tsuba); blade points +Y. Flip so the handle is on top.
-  return (
-    <group rotation={[Math.PI, 0, 0]} scale={SWORD_SCALE}>
-      <primitive object={clonedScene} />
-    </group>
-  )
 }
 
 interface Pose {
@@ -169,7 +174,9 @@ export function Katana({ cursorRef }: KatanaProps) {
   const spinRef = useRef<THREE.Group>(null!)
   const tipRef = useRef<THREE.Object3D>(null!)
   const guardRef = useRef<THREE.Object3D>(null!)
-  const tasselAnchorRef = useRef<THREE.Object3D>(null!)
+  const sayaMouthRef = useRef(new THREE.Vector3())
+  const dark = useKatanaModel('dark')
+  const light = useKatanaModel('light')
 
   const poses = useRef({ hero: makePose(), finale: makePose() })
   const state = useRef({
@@ -179,7 +186,31 @@ export function Katana({ cursorRef }: KatanaProps) {
     driftX: 0,
     driftY: 0,
     time: 0,
+    /** which katana is out: follows the theme, swapped at the start of a reveal */
+    kind: (sceneStore.day > 0.5 ? 'light' : 'dark') as KatanaKind,
+    /** own rise for reveals not driven by the intro / finale (theme toggle) 0 → 1 */
+    rise: 1,
+    /** saya slide 0 (sheathed) → 1 (gone under the water) */
+    draw: 0,
+    /** what starts the draw: 'intro' (katanaRise), 'finale' (katanaFinale), 'own' (rise) */
+    cue: 'intro' as 'intro' | 'finale' | 'own',
+    sayaWasAbove: true,
+    finaleWas: 0,
   })
+
+  // theme toggle: the other theme's katana rises sheathed and is drawn again
+  useLayoutEffect(
+    () =>
+      onSceneEvent('theme', () => {
+        const s = state.current
+        s.kind = sceneStore.day > 0.5 ? 'light' : 'dark'
+        if (sceneStore.reducedMotion) return
+        s.rise = 0
+        s.draw = 0
+        s.cue = 'own'
+      }),
+    []
+  )
 
   // nav jump (screen covered by the slash): settle the spin spring instantly instead of unwinding turns
   useLayoutEffect(
@@ -215,9 +246,18 @@ export function Katana({ cursorRef }: KatanaProps) {
     const finale = sceneStore.katanaFinale
     const inFinale = finale > 0.001
     const pose = inFinale ? poses.current.finale : poses.current.hero
+    // finale entered again (scrolled into Enquire): rise sheathed and draw once more
+    if (finale > 0.001 && s.finaleWas <= 0.001 && !reduced) {
+      s.draw = 0
+      s.cue = 'finale'
+      s.rise = 1
+    }
+    s.finaleWas = finale
+    if (s.rise < 1) s.rise = Math.min(1, s.rise + delta / 1.7)
+    const ownUnder = 1 - easeOutExpo(s.rise)
     const under = inFinale
-      ? 1 - easeOutExpo(finale)
-      : Math.max(1 - easeOutExpo(sceneStore.katanaRise), easeInOutCubic(sceneStore.katanaSink))
+      ? Math.max(1 - easeOutExpo(finale), ownUnder)
+      : Math.max(1 - easeOutExpo(sceneStore.katanaRise), easeInOutCubic(sceneStore.katanaSink), ownUnder)
     const visible = under < 0.999
     sceneStore.swordVisible = visible
     rootRef.current.visible = visible
@@ -228,6 +268,38 @@ export function Katana({ cursorRef }: KatanaProps) {
     // slide along the blade's own axis — tip first out of the water
     sinkRef.current.position.copy(pose.dir).multiplyScalar(pose.sinkDepth * under)
     sinkRef.current.position.y += bob
+
+    /* 1b. The reveal: once the sheathed sword is up, the saya slides off down the blade
+          (toward the tip, into the water), leaves with a slight tilt and sinks back in. */
+    const cueUp = s.cue === 'intro' ? sceneStore.katanaRise > 0.82 : s.cue === 'finale' ? finale > 0.85 : s.rise > 0.82
+    if (reduced) s.draw = 1
+    else if (s.draw < 1 && cueUp) s.draw = Math.min(1, s.draw + delta / 1.6)
+    const model = s.kind === 'light' ? light : dark
+    const other = s.kind === 'light' ? dark : light
+    model.root.visible = true
+    other.root.visible = false
+    const saya = model.saya
+    if (saya) {
+      const d = s.draw
+      // a short pull to free it, then it falls along the blade under its own weight
+      const pull = Math.min(1, d / 0.12)
+      const fall = Math.max(0, (d - 0.12) / 0.88)
+      // model units: from the guard to well below the water along the blade axis
+      const reach = (Math.max(0.3, (pose.guard.y - WATER_Y) / Math.max(0.3, Math.abs(pose.dir.y))) + 1.2) / SWORD_SCALE
+      // (the saya node keeps the file's own frame: the blade runs along its local +X)
+      saya.position.set(0.012 * easeOutExpo(pull) + reach * fall * fall, 0, 0)
+      saya.rotation.set(0, 0, 0.16 * fall * fall * fall)
+      saya.visible = d < 1
+      // splash where the saya mouth goes through the surface
+      saya.getWorldPosition(sayaMouthRef.current)
+      const above = sayaMouthRef.current.y > WATER_Y
+      if (s.sayaWasAbove && !above && d > 0 && d < 1) {
+        sceneStore.splash.x = sayaMouthRef.current.x
+        sceneStore.splash.z = sayaMouthRef.current.z
+        sceneStore.splash.strength = 0.05
+      }
+      s.sayaWasAbove = above || d === 0
+    }
 
     /* 2. Scroll-driven spin around the blade axis, followed by a critically damped spring;
           the finale blends to the nearest calm rest angle. */
@@ -267,23 +339,25 @@ export function Katana({ cursorRef }: KatanaProps) {
           <group ref={tiltRef}>
             <group ref={orientRef}>
               <group ref={spinRef} rotation={[0, REST_SPIN, 0]}>
-                <AntiqueKatanaModel />
-                {/* blade tip (model +Y 0.696, flipped) and a focus point on the upper blade */}
+                {/* model origin at the guard, blade along +Y: flip so the handle is on top */}
+                <group rotation={[Math.PI, 0, 0]} scale={SWORD_SCALE}>
+                  <primitive object={dark.root} />
+                  <primitive object={light.root} />
+                </group>
+                {/* blade tip (model +Y 0.699, flipped) and a focus point on the upper blade */}
                 <object3D ref={tipRef} position={[0, -BLADE_LEN, 0]} />
                 <object3D ref={guardRef} position={[0, -0.6, 0]} />
-                {/* cord tie point on the handle just above the guard */}
-                <object3D ref={tasselAnchorRef} position={[0.045, 0.2, 0.0]} />
               </group>
             </group>
           </group>
         </group>
       </group>
-      <KatanaTassel anchorRef={tasselAnchorRef} cursorRef={cursorRef} scale={SWORD_SCALE} />
     </>
   )
 }
 
 // Preload the GLB model for instant WebGL instantiation
-useGLTF.preload(KATANA_URL)
+useGLTF.preload(KATANA_URLS.dark)
+useGLTF.preload(KATANA_URLS.light)
 
 export default Katana

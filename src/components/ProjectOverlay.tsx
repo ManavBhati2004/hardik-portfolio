@@ -36,7 +36,6 @@ export function ProjectOverlay({ project, origin, onClosed }: { project: Project
       tl.fromTo(root, { opacity: 0 }, { opacity: 1, duration: 0.4 })
     } else {
       tl.fromTo(root.querySelector('.po-backdrop'), { opacity: 0 }, { opacity: 1, duration: 0.6 }, 0)
-        .fromTo(root.querySelector('.po-sheet'), { clipPath: 'inset(0 0 100% 0)' }, { clipPath: 'inset(0 0 0% 0)', duration: 1.1 }, 0.05)
         .fromTo(frame, { ...from, transformOrigin: '0 0' }, { x: 0, y: 0, scaleX: 1, scaleY: 1, duration: 1.0 }, 0)
         .fromTo(items, { yPercent: 110 }, { yPercent: 0, duration: 1.1, ease: 'expo.out', stagger: 0.07 }, 0.55)
         .fromTo(closeRef.current, { opacity: 0 }, { opacity: 1, duration: 0.5 }, 0.7)
@@ -62,7 +61,6 @@ export function ProjectOverlay({ project, origin, onClosed }: { project: Project
         .to(items, { yPercent: -110, duration: 0.45, ease: 'power3.in', stagger: 0.03 }, 0)
         .to(closeRef.current, { opacity: 0, duration: 0.3 }, 0)
         .to(frame, { ...back, duration: 0.9 }, 0.2)
-        .to(root.querySelector('.po-sheet'), { clipPath: 'inset(0 0 100% 0)', duration: 0.8 }, 0.25)
         .to(root.querySelector('.po-backdrop'), { opacity: 0, duration: 0.6 }, 0.45)
     }
 
@@ -98,7 +96,6 @@ export function ProjectOverlay({ project, origin, onClosed }: { project: Project
         <span className="po-close-x" aria-hidden="true" />
       </button>
       <div className="po-inner">
-        <span className="po-sheet washi" aria-hidden="true" />
         <div className="po-frame" ref={frameRef}>
           {project.videoSrc ? (
             <video src={project.videoSrc} poster={project.poster} muted loop playsInline autoPlay controls={false} />

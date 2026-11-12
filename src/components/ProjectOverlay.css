@@ -45,22 +45,12 @@
   position: relative;
   z-index: 1;
   width: min(1180px, 88vw);
-  isolation: isolate;
   padding: 12vh 0 8vh;
   display: grid;
   gap: 2.6rem;
 }
-/* the paper the case is mounted on: wooden strips top and bottom */
-.po-sheet {
-  position: absolute;
-  inset: 7vh -3.5vw 3vh;
-  z-index: -1;
-  border-block: 12px solid var(--wood);
-  box-shadow: 0 40px 90px -30px var(--paper-shadow);
-}
 .po-frame {
   position: relative;
-  box-shadow: 0 0 0 1px rgba(29, 25, 22, 0.6), 0 0 0 8px rgba(74, 23, 22, 0.16);
   aspect-ratio: 16 / 9;
   overflow: hidden;
   background: #0b0b0d;
@@ -69,7 +59,7 @@
 .po-copy { display: grid; gap: 0.8rem; max-width: 60ch; }
 .po-line { overflow: hidden; }
 .po-reveal { display: block; }
-.po-cat { font-size: var(--fs-xs); letter-spacing: 0.28em; text-transform: uppercase; color: var(--seal); }
-.po-title { font-size: var(--fs-xl); font-weight: 400; color: var(--paper-ink); }
-.po-desc { color: var(--paper-ink-muted); }
-.po-link { display: inline-block; margin-top: 0.6rem; color: var(--paper-ink); border-bottom: 1px solid rgba(29, 25, 22, 0.55); padding-bottom: 0.2rem; }
+.po-cat { font-size: var(--fs-xs); letter-spacing: 0.28em; text-transform: uppercase; color: var(--crimson-glow); }
+.po-title { font-size: var(--fs-xl); font-weight: 300; }
+.po-desc { color: var(--bone-muted); }
+.po-link { display: inline-block; margin-top: 0.6rem; border-bottom: 1px solid var(--hairline-strong); padding-bottom: 0.2rem; }

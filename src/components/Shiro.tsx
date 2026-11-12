@@ -18,20 +18,20 @@ type Kind = 'plaster' | 'roof' | 'stone' | 'window' | 'wood' | 'foliage' | 'grou
 
 /** Albedo per material: [night, day]. Night is dark and moonlit; day is pale and hazy. */
 const PALETTE: Record<Kind, [string, string]> = {
-  plaster: ['#6a6870', '#efebe3'],
-  roof: ['#18171b', '#454a52'],
-  stone: ['#2a2625', '#8f897f'],
+  plaster: ['#a9a6b0', '#efebe3'],
+  roof: ['#2a282e', '#454a52'],
+  stone: ['#4a4441', '#8f897f'],
   window: ['#0c0908', '#2c2927'],
   wood: ['#151213', '#3d3733'],
   foliage: ['#111411', '#5f7258'],
   ground: ['#131211', '#867f6c'],
 }
 /** How strongly each surface catches the crimson rim at night. */
-const RIM: Record<Kind, number> = { plaster: 0.12, roof: 0.6, stone: 0.1, window: 0, wood: 0.12, foliage: 0.05, ground: 0.03 }
+const RIM: Record<Kind, number> = { plaster: 0.3, roof: 1.1, stone: 0.18, window: 0, wood: 0.12, foliage: 0.05, ground: 0.03 }
 
 const NIGHT_LIGHT = new THREE.Color(CRIMSON).multiplyScalar(0.8)
 const DAY_LIGHT = new THREE.Color('#ffe8cc').multiplyScalar(1.05)
-const NIGHT_AMBIENT = new THREE.Color('#9aa0b8').multiplyScalar(0.7)
+const NIGHT_AMBIENT = new THREE.Color('#9aa0b8').multiplyScalar(1.15)
 const DAY_AMBIENT = new THREE.Color('#d6e2f0').multiplyScalar(0.62)
 const RIM_COLOR = new THREE.Color('#9c1a15')
 const WARM = new THREE.Color('#ff9a4a').multiplyScalar(1.8)
@@ -90,7 +90,7 @@ const fragmentShader = /* glsl */ `
 
     // night: a few dim warm windows, breathing slowly
     float lit = vCol.g * uWindow * (1.0 - uDay);
-    col += uWarm * lit * (0.75 + 0.25 * sin(uTime * 0.7 + vCol.b * 40.0));
+    col += uWarm * lit * 2.2 * (0.75 + 0.25 * sin(uTime * 0.7 + vCol.b * 40.0));
 
     // distance haze toward the live scene fog colour, thicker near the water
     float d = length(cameraPosition - vWorld);
@@ -166,8 +166,8 @@ export function Shiro() {
     shared.uLightDir.value.copy(day ? DAY_DIR : MOON_DIR)
     shared.uLightCol.value.copy(day ? DAY_LIGHT : NIGHT_LIGHT)
     shared.uAmbient.value.copy(day ? DAY_AMBIENT : NIGHT_AMBIENT)
-    shared.uHaze.value = day ? 0.06 : 0.1
-    shared.uFogDensity.value = day ? 0.015 : 0.011
+    shared.uHaze.value = day ? 0.06 : 0.02
+    shared.uFogDensity.value = day ? 0.015 : 0.0075
     if (sceneFog && 'color' in sceneFog) shared.uFogCol.value.copy(sceneFog.color)
   })
 

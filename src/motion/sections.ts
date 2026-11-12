@@ -91,9 +91,6 @@ export function setupSections(): () => void {
  * [data-reveal="lines"] masked line-by-line (0.08 s stagger, once at 80%)
  * [data-reveal="ink"]   organic ink-bleed from a corner (data-ink="tl|tr|bl|br")
  * [data-reveal="rise"]  short masked rise for single items
- * [data-reveal="brush"] a brush stroke drawn left to right
- * [data-reveal="stamp"] a seal pressed onto the paper
- * [data-reveal="unroll"] a scroll unrolling downward: [data-unroll-body] opens, [data-unroll-rod] travels with its edge
  */
 export function setupReveals(root: Element): () => void {
   const ctx = gsap.context(() => {
@@ -128,77 +125,7 @@ export function setupReveals(root: Element): () => void {
       )
     })
 
-    root.querySelectorAll<HTMLElement>('[data-reveal="brush"]').forEach((el) => {
-      gsap.fromTo(
-        el,
-        { clipPath: sceneStore.reducedMotion ? 'inset(0 0% 0 0)' : 'inset(0 100% 0 0)', opacity: sceneStore.reducedMotion ? 0 : 1 },
-        {
-          clipPath: 'inset(0 0% 0 0)',
-          opacity: 1,
-          duration: 1.3,
-          ease: 'power2.inOut',
-          delay: Number(el.dataset.delay) || 0,
-          scrollTrigger: { trigger: el, start: 'top 97%', once: true },
-        }
-      )
-    })
-
-    root.querySelectorAll<HTMLElement>('[data-reveal="stamp"]').forEach((el) => {
-      gsap.fromTo(
-        el,
-        { opacity: 0, scale: sceneStore.reducedMotion ? 1 : 1.7, rotation: sceneStore.reducedMotion ? -4 : -16 },
-        {
-          opacity: 1,
-          scale: 1,
-          rotation: -4,
-          duration: 0.5,
-          ease: 'power4.in',
-          delay: Number(el.dataset.delay) || 0,
-          scrollTrigger: { trigger: el, start: 'top 97%', once: true },
-        }
-      )
-    })
-
-    root.querySelectorAll<HTMLElement>('[data-reveal="unroll"]').forEach((el) => {
-      const undoUnroll = unrollOnScroll(el, Number(el.dataset.delay) || 0)
-      void undoUnroll
-    })
-
     return undoLines
   }, root)
   return () => ctx.revert()
-}
-
-/**
- * A hanging scroll unrolling: the body opens downward (clip), the bottom rod rides its
- * lower edge, then the whole scroll settles with a small sway from its hanging point.
- * Must run inside a gsap.context (it is reverted with it).
- */
-export function unrollOnScroll(el: HTMLElement, delay = 0, onOpen?: () => void) {
-  const body = el.querySelector<HTMLElement>('[data-unroll-body]') ?? el
-  const rod = el.querySelector<HTMLElement>('[data-unroll-rod]')
-  const reduced = sceneStore.reducedMotion
-  if (reduced) {
-    gsap.set(el, { opacity: 0 })
-  } else {
-    gsap.set(body, { clipPath: 'inset(0 -40px 100% -40px)' })
-    if (rod) gsap.set(rod, { y: () => -body.offsetHeight })
-  }
-  return ScrollTrigger.create({
-    trigger: el,
-    start: 'top 86%',
-    once: true,
-    onEnter: () => {
-      if (reduced) {
-        gsap.to(el, { opacity: 1, duration: 0.6, delay })
-        onOpen?.()
-        return
-      }
-      const tl = gsap.timeline({ delay })
-      tl.to(body, { clipPath: 'inset(0 -40px 0% -40px)', duration: 1.5, ease: 'power3.inOut' }, 0)
-      if (rod) tl.fromTo(rod, { y: -body.offsetHeight }, { y: 0, duration: 1.5, ease: 'power3.inOut' }, 0)
-      tl.fromTo(el, { rotation: 0 }, { keyframes: [{ rotation: 0.7, duration: 0.5 }, { rotation: -0.35, duration: 0.7 }, { rotation: 0, duration: 0.8 }], ease: 'sine.inOut', transformOrigin: '50% 0%' }, 1.1)
-      tl.add(() => onOpen?.(), 1.0)
-    },
-  })
 }
