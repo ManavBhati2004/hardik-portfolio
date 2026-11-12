@@ -57,6 +57,12 @@ export const TORII_XZ = new THREE.Vector2(8.45, -8.6)
 /** Centre of the gate, used to aim the shrine close-up (y set to the planted gate in Environment). */
 export const TORII_FOCUS = new THREE.Vector3(8.39, -0.45, -8.56)
 
+/** Distant castle on its wooded hill across the water, behind and right of the torii.
+ *  Model origin = main keep axis at water level; the model's front faces +Z. */
+export const SHIRO_POSITION = new THREE.Vector3(34, WATER_Y, -31)
+export const SHIRO_SCALE = 0.15
+export const SHIRO_YAW = -0.55
+
 /* ─── Camera journey keyframes ───
    `t` is the section progress (cameraT 0..4) at which the camera reaches the key.
    Hero → Craftsmanship (0 → 1): push in toward the blade, then glide right to a
@@ -73,8 +79,9 @@ export const CAMERA_PATH: CameraKey[] = [
   { t: 0.4, pos: new THREE.Vector3(0.7, -1.3, 5.4), target: new THREE.Vector3(1.6, -0.85, -2.5) },
   // 1 craft — shrine close-up: just above the foreground slab (its top is y ≈ −1.46), about
   // 3.7 units from the gate (≈ a third of the frame tall); aimed slightly left of the gate
-  // so the torii sits right of centre, clear of the Craftsmanship copy on the left
-  { t: 1, pos: new THREE.Vector3(6.55, -0.2, -5.35), target: new THREE.Vector3(8.09, -0.47, -8.73) },
+  // so the torii sits right of centre, clear of the Craftsmanship copy on the left; aimed a
+  // touch right and up so the distant castle (SHIRO_POSITION) reads beyond the gate
+  { t: 1, pos: new THREE.Vector3(6.55, -0.2, -5.35), target: new THREE.Vector3(8.25, -0.42, -8.73) },
   // 2 legacy — drift along the headland past the shrine
   { t: 2, pos: new THREE.Vector3(7.6, -1.25, -1.8), target: new THREE.Vector3(10.5, -0.6, -11) },
   // 3 gallery — pull back and tilt up toward the sky

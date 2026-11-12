@@ -9,6 +9,7 @@ import { SkyBackground } from './SkyBackground'
 import { BlossomBranch } from './AutumnTree'
 import { FallingLeaves } from './FallingLeaves'
 import { Environment } from './Environment'
+import { Shiro } from './Shiro'
 import { GroundFog } from './GroundFog'
 import { HorizonEffect } from './HorizonEffect'
 import { SceneEnvironment } from './SceneEnvironment'
@@ -216,6 +217,7 @@ function SceneContents({ cursorRef, quality }: { cursorRef: CursorRef; quality: 
         <BlossomBranch />
         <FallingLeaves />
         <Environment />
+        <Shiro />
         <GroundFog />
         <HorizonEffect />
         <WarmUp />
