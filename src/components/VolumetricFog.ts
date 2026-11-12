@@ -185,8 +185,8 @@ const fragment = /* glsl */ `
     // lighting colours: night = cool grey mist + crimson moonlight; day = luminous paper-white + warm sun
     vec3 ambN = vec3(0.075, 0.075, 0.088);
     vec3 litN = vec3(0.62, 0.11, 0.1);
-    vec3 ambD = vec3(1.18, 1.16, 1.13);
-    vec3 litD = vec3(1.6, 1.42, 1.15);
+    vec3 ambD = vec3(1.2, 1.18, 1.14);
+    vec3 litD = vec3(1.7, 1.2, 0.8);
     vec3 amb = mix(ambN, ambD, uDay) * uAmbK;
     vec3 lightC = mix(litN, litD, uDay);
 
@@ -275,7 +275,7 @@ export class VolumetricFogEffect extends Effect {
     u.get('uDay')!.value = sceneStore.day
     u.get('uPart')!.value = sceneStore.fogPart
     // swells while the camera travels low over the water; slightly denser on a misty morning
-    u.get('uDensity')!.value = (1 + 0.65 * sceneStore.fogThicken) * (sceneStore.day > 0.5 ? 1.1 : 1)
+    u.get('uDensity')!.value = (1 + 0.65 * sceneStore.fogThicken) * (sceneStore.day > 0.5 ? 0.85 : 1)
     const t = sceneStore.cameraT
     u.get('uCenterThin')!.value = 1 - Math.min(1, t * 2, Math.max(0, (4 - t) * 2))
   }

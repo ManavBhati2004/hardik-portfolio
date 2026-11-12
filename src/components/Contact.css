@@ -45,25 +45,27 @@
   color: var(--bone);
 }
 /* slide-through underline: enters from the left, exits to the right */
+/* a brush stroke drawn under the link: loaded at the start, drying toward the end */
 .contact-link-text {
-  background: linear-gradient(var(--crimson-glow), var(--crimson-glow)) no-repeat right bottom / 0% 1px;
-  transition: background-size 0.6s var(--ease-out-expo);
-  padding-bottom: 2px;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 10' preserveAspectRatio='none'%3E%3Cpath fill='%23b3261e' d='M2 5.2C30 1.4 90 2.2 150 3.4S300 3.2 398 5C330 6.4 250 7.6 170 7.4S40 8.8 2 5.2Z'/%3E%3C/svg%3E") no-repeat left bottom / 0% 6px;
+  transition: background-size 0.9s var(--ease-scroll);
+  padding-bottom: 6px;
 }
 .contact-link:hover .contact-link-text,
 .contact-link:focus-visible .contact-link-text {
-  background-position: left bottom;
-  background-size: 100% 1px;
+  background-size: 100% 6px;
 }
+.contact-brush { width: min(14rem, 60%); margin-top: -0.4rem; }
+.contact-rule { margin-top: 8vh; height: 7px; opacity: 0.55; }
+.contact-footer-mark { display: inline-flex; align-items: center; gap: 1rem; }
+.contact-footer-mark .hanko { --hanko-size: 2rem; }
 
 .contact-footer {
   display: flex;
   justify-content: space-between;
   align-items: center;
   gap: 1rem;
-  padding: 3rem 0 2.4rem;
-  margin-top: 8vh;
-  border-top: 1px solid var(--hairline);
+  padding: 2.2rem 0 2.4rem;
   font-size: var(--fs-xs);
   letter-spacing: 0.14em;
   color: var(--smoke);

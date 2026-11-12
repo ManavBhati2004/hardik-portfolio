@@ -46,7 +46,7 @@ const frag = /* glsl */ `
 const NIGHT_BAND = HORIZON_COLOR.clone().multiplyScalar(1.6)
 const DAY_BAND = new THREE.Color(1.0, 0.98, 0.95).multiplyScalar(1.5)
 const NIGHT_GLOW = new THREE.Color('#2a0606')
-const DAY_GLOW = new THREE.Color(0.12, 0.08, 0.03)
+const DAY_GLOW = new THREE.Color(0.16, 0.07, 0.0)
 
 export function HorizonEffect() {
   const uniforms = useMemo(

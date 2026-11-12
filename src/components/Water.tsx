@@ -165,15 +165,17 @@ const waterFrag = /* glsl */ `
     float F = 0.02 + 0.98 * pow(1.0 - NdotV, 5.0);
     float reflAmt = clamp(F * 1.35 + 0.18, 0.0, 0.92);
 
-    vec3 body = mix(vec3(0.0035, 0.0032, 0.0040), vec3(0.34, 0.39, 0.43), uDay);
-    vec3 col = mix(body, refl, reflAmt);
+    // day: a light blue lake under an off-white sky (the mirrored sky is tinted toward blue)
+    vec3 body = mix(vec3(0.0035, 0.0032, 0.0040), vec3(0.26, 0.50, 0.76), uDay);
+    refl *= mix(vec3(1.0), vec3(0.60, 0.80, 1.0), uDay);
+    vec3 col = mix(body, refl, reflAmt * mix(1.0, 0.72, uDay));
 
     // ── GGX moon glints on the ripples (restrained crimson)
     vec3 Lm = normalize(uMoonPos - vWorld);
     vec3 Hm = normalize(Lm + V);
     float spec = D_GGX(clamp(dot(N, Hm), 0.0, 1.0), 0.12) * F;
     // night: restrained crimson glints from the moon; day: warm-white sparkle from the sun
-    col += mix(vec3(0.55, 0.06, 0.05) * 0.2, vec3(1.0, 0.95, 0.85) * 0.5, uDay) * spec;
+    col += mix(vec3(0.55, 0.06, 0.05) * 0.2, vec3(1.0, 0.56, 0.26) * 1.1, uDay) * spec;
 
     // cool key-light sparkle on near ripples
     vec3 Hk = normalize(uKeyDir + V);
@@ -183,7 +185,7 @@ const waterFrag = /* glsl */ `
 
     // ── distance fade into the shared horizon haze (no hard seam)
     float haze = 1.0 - exp(-pow(dist * 0.032, 1.6));
-    col = mix(col, uHorizon, clamp(haze, 0.0, 1.0));
+    col = mix(col, uHorizon, clamp(haze, 0.0, 1.0) * mix(1.0, 0.7, uDay));
 
     // dither against banding in the dark gradient
     col += (fract(sin(dot(gl_FragCoord.xy, vec2(12.9898, 78.233))) * 43758.5453) - 0.5) / 512.0;

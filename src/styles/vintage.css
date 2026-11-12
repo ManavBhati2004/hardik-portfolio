@@ -1,0 +1,136 @@
+/* ─────────────────────────────────────────────────────────────────────────────
+   Aged-scroll kit (Craftsmanship, Legacy, Gallery, Enquire, project overlay):
+   washi paper, wooden rods, brocade strips, hanko seals, sumi brush strokes.
+   Paper is paper in both themes — only a little dimmer under the night scene.
+   ───────────────────────────────────────────────────────────────────────────── */
+:root {
+  --paper: #d6cbb2;
+  --paper-deep: #bfb192;
+  --paper-ink: #1d1916;
+  --paper-ink-muted: #5d5347;
+  --wood: #2c1c12;
+  --wood-light: #6a4a31;
+  --brocade: #4a1716;
+  --brocade-thread: rgba(214, 178, 110, 0.5);
+  --seal: #b3261e;
+  --paper-shadow: rgba(0, 0, 0, 0.55);
+  --ease-scroll: cubic-bezier(0.62, 0.02, 0.2, 1);
+}
+:root[data-theme='light'] {
+  --paper: #e9dfc8;
+  --paper-deep: #d2c4a4;
+  --paper-shadow: rgba(60, 45, 25, 0.28);
+}
+
+/* washi: fine grain + long fibres + age darkening toward the edges */
+.washi {
+  color: var(--paper-ink);
+  background-color: var(--paper);
+  background-image:
+    radial-gradient(ellipse at 50% 50%, transparent 55%, rgba(96, 70, 34, 0.22) 100%),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='260' height='260'%3E%3Cfilter id='f'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.012 .55' numOctaves='2' seed='7' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .32 0 0 0 0 .24 0 0 0 0 .13 0 0 0 .5 -.2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23f)'/%3E%3C/svg%3E"),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' seed='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .3 0 0 0 0 .22 0 0 0 0 .12 0 0 0 .55 -.1'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23g)'/%3E%3C/svg%3E");
+}
+
+/* wooden roller with turned end caps */
+.scroll-rod {
+  display: block;
+  position: relative;
+  height: 12px;
+  margin: 0 -14px;
+  border-radius: 6px;
+  background: linear-gradient(180deg, var(--wood-light), var(--wood) 55%, #140c07);
+  box-shadow: 0 6px 14px -4px var(--paper-shadow);
+}
+.scroll-rod::before,
+.scroll-rod::after {
+  content: '';
+  position: absolute;
+  top: -3px;
+  width: 12px;
+  height: 18px;
+  border-radius: 3px;
+  background: linear-gradient(180deg, #8a6a48, #2a1a10 60%, #0f0906);
+}
+.scroll-rod::before { left: -6px; }
+.scroll-rod::after { right: -6px; }
+.scroll-rod--slim { height: 6px; margin: 0 -6px; }
+.scroll-rod--slim::before, .scroll-rod--slim::after { display: none; }
+
+/* brocade strip (ichimonji): dark silk with a woven gold thread pattern */
+.brocade {
+  display: block;
+  height: 10px;
+  background-color: var(--brocade);
+  background-image:
+    repeating-linear-gradient(45deg, var(--brocade-thread) 0 1px, transparent 1px 7px),
+    repeating-linear-gradient(-45deg, var(--brocade-thread) 0 1px, transparent 1px 7px);
+}
+
+/* hanko: a worn red seal */
+.hanko {
+  --hanko-size: 2.6rem;
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: var(--hanko-size);
+  height: var(--hanko-size);
+  transform: rotate(-4deg);
+}
+.hanko svg { width: 100%; height: 100%; overflow: visible; }
+.hanko rect { fill: var(--seal); }
+.hanko text {
+  fill: var(--paper);
+  font-family: var(--font-jp);
+  font-weight: 500;
+  font-size: 30px;
+  text-anchor: middle;
+  dominant-baseline: central;
+}
+.hanko--outline rect { fill: none; stroke: var(--seal); stroke-width: 3; }
+.hanko--outline text { fill: var(--seal); }
+
+/* sumi brush stroke */
+.brush { display: block; width: 100%; height: 9px; color: var(--bone); overflow: visible; }
+.brush path { fill: currentColor; }
+.brush--crimson { color: var(--crimson); }
+.brush--ink { color: var(--paper-ink); }
+
+/* kanji numerals */
+.kanji-num {
+  font-family: var(--font-jp);
+  font-weight: 400;
+  line-height: 1;
+}
+
+/* ── Sliding paper doors (nav jumps) ── */
+.slash-panel.fusuma {
+  width: 50%;
+  inset: 0 auto 0 0;
+  border: 14px solid var(--wood);
+  box-shadow: inset 0 0 0 2px #0e0805, 0 0 60px rgba(0, 0, 0, 0.6);
+}
+.slash-panel.fusuma--b { inset: 0 0 0 auto; }
+/* lattice (kumiko) over the paper */
+.slash-panel.fusuma::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    repeating-linear-gradient(90deg, transparent 0 calc(25% - 3px), var(--wood) calc(25% - 3px) 25%),
+    repeating-linear-gradient(180deg, transparent 0 calc(20% - 3px), var(--wood) calc(20% - 3px) 20%);
+  opacity: 0.85;
+}
+/* door pull */
+.slash-panel.fusuma::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  width: 26px;
+  height: 26px;
+  margin-top: -13px;
+  border-radius: 50%;
+  background: radial-gradient(circle, #0b0705 40%, #6a4a31 44%, #24160d 70%);
+}
+.slash-panel.fusuma--a::after { right: 5%; }
+.slash-panel.fusuma--b::after { left: 5%; }

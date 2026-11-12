@@ -43,13 +43,13 @@ function DayFormers() {
       {/* bright overcast dome */}
       <Lightformer form="rect" intensity={2.2} color="#f4f2ee" position={[0, 9, 0]} rotation-x={Math.PI / 2} scale={[40, 40, 1]} />
       {/* warm low sun behind the scene (where the moon is by night) */}
-      <Lightformer form="circle" intensity={6} color="#fff1dc" position={[MOON_POSITION.x, MOON_POSITION.y + 1, -12]} scale={5} target={[0, 0, 0]} />
+      <Lightformer form="circle" intensity={6} color="#ffc48a" position={[MOON_POSITION.x, MOON_POSITION.y + 1, -12]} scale={5} target={[0, 0, 0]} />
       {/* long key strip: the polished sweep along the blade */}
       <Lightformer form="rect" intensity={4} color="#ffffff" position={[4, 5, 5]} scale={[10, 1.1, 1]} target={[0, 0, 0]} />
       {/* soft panel behind the camera: the blade face mirrors a pale sky */}
       <Lightformer form="rect" intensity={1.5} color="#eef0f2" position={[1.5, 1.5, 12]} scale={[26, 5, 1]} target={[0, 0, 0]} />
       {/* misty water bounce from below */}
-      <Lightformer form="rect" intensity={0.9} color="#b9c1c8" position={[0, -4, 0]} rotation-x={-Math.PI / 2} scale={[30, 30, 1]} />
+      <Lightformer form="rect" intensity={0.9} color="#a9c6dc" position={[0, -4, 0]} rotation-x={-Math.PI / 2} scale={[30, 30, 1]} />
     </>
   )
 }

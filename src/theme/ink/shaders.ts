@@ -3,9 +3,12 @@
  * pigment rim) is ported from "Ink Bleed" by Codemure (https://www.codemure.com),
  * MIT License, Copyright (c) 2026 Codemure.
  *
- * Adapted for a live WebGL page: instead of blending two page snapshots, the overlay
- * shows the frozen "from" frame and the ink makes it TRANSPARENT, revealing the live,
- * already-switched scene underneath. Output is premultiplied alpha.
+ * Adapted for a live WebGL page: the browser's View Transition holds the frozen old
+ * screen and the live new one; this shader runs in two modes over the same ink front:
+ *  - FIELD   (tiny offscreen target): signed distance to the smooth front, packed in
+ *            16 bits — read back and turned into the clip-path that reveals the new page
+ *  - PIGMENT (the visible overlay): the ink itself — a band of pigment at the front,
+ *            tendrils, fibres, haze and speckles. Output is premultiplied alpha.
  */
 import { NOISE_CELLS } from './noiseTexture'
 
@@ -20,9 +23,10 @@ export const INK_FRAG = /* glsl */ `#version 300 es
 precision highp float;
 precision highp int;
 
-uniform sampler2D uFrom;    // frozen frame, viewport-sized, top-down rows
-uniform float uCanvasScale; // device px per CSS px
-uniform vec2 uRes;          // canvas device px
+uniform vec2 uCssPerPx;     // CSS px per target px
+uniform vec2 uRes;          // target px
+uniform float uFlipY;       // 1: target rows are bottom-up (screen); 0: top-down (field read-back)
+uniform float uField;       // 1: write the packed front distance; 0: draw the pigment
 
 uniform vec2 uCenter;       // CSS px, viewport-relative
 uniform float uRadius;      // CSS px, eased base radius
@@ -73,14 +77,8 @@ float fbm5(vec2 p) {
   return s / 0.96875;
 }
 
-vec3 sampleFrom(vec2 devPx) {
-  vec2 uv = clamp(devPx / uRes, vec2(0.0), vec2(1.0));
-  return texture(uFrom, uv).rgb;
-}
-
 void main() {
-  vec2 devPx = vec2(gl_FragCoord.x, uRes.y - gl_FragCoord.y);
-  vec2 css = devPx / uCanvasScale;
+  vec2 css = vec2(gl_FragCoord.x, mix(gl_FragCoord.y, uRes.y - gl_FragCoord.y, uFlipY)) * uCssPerPx;
   vec2 rel = css - uCenter;
   float d = length(rel);
   float R = uRadius;
@@ -88,8 +86,7 @@ void main() {
 
   float inner = R * (1.0 - A_SUM) + cleanup - FIBRE_PX - THIN_MAX_PX - uSoftness * 2.0;
   float outer = R * (1.0 + A_SUM) * (1.0 + TENDRIL_REACH * uTendril) + cleanup + FIBRE_PX + SPECK_PX + uSoftness * 2.0;
-  if (d < inner) { outColor = vec4(0.0); return; }
-  if (d > outer) { outColor = vec4(sampleFrom(devPx), 1.0); return; }
+  if (uField < 0.5 && (d < inner - 24.0 || d > outer)) { outColor = vec4(0.0); return; }
 
   float t = uTime * uDrift;
   vec2 p = rel / uRef;
@@ -103,6 +100,14 @@ void main() {
   float lobes = gnoise(lq) * 0.75 + gnoise(lq * 2.1 + 9.1) * 0.25;
   float reach = clamp(1.0 + A_LOBE * 1.6 * lobes + A_BLOB * 1.5 * blob, 1.0 - A_SUM, 1.0 + A_SUM);
   float f = d - R * reach;
+  // the smooth front (no tendrils / fibres): what the page clip follows
+  float fs = f - cleanup;
+  if (uField > 0.5) {
+    float v = clamp(0.5 + fs / 512.0, 0.0, 1.0) * 65535.0;
+    float hi = floor(v / 256.0);
+    outColor = vec4(hi / 255.0, (v - hi * 256.0) / 255.0, 0.0, 1.0);
+    return;
+  }
 
   float gate = smoothstep(-0.35, 0.4, fbm3(dir * 1.6 + uSeed * 0.61 + 3.7));
   vec2 tq = dir * (2.2 * ns) + (d / uRef) * vec2(2.6, -1.9) * ns + 1.2 * w + uSeed * 1.7 + vec2(0.0, 0.18 * t);
@@ -124,31 +129,23 @@ void main() {
 
   float soft = max(uSoftness, 0.6);
   float inked = 1.0 - smoothstep(-soft, soft, f);
-  float thinW = mix(3.0, THIN_MAX_PX, clamp(blob * 0.8 + 0.3, 0.0, 1.0));
-  float density = mix(0.6, 1.0, smoothstep(0.0, thinW, -f));
-  float cov = inked * density;
+
+  // pigment band: opaque over the first pixels behind the front (it covers the edge of the
+  // page clip, which follows the smooth front a few px inside), thinning out further in
+  float band = 1.0 - smoothstep(8.0, 20.0, -fs);
+  float a = inked * band;
 
   float hazeW = mix(4.0, HAZE_PX, clamp(0.5 + 0.5 * blob, 0.0, 1.0));
   float haze = (1.0 - smoothstep(0.0, hazeW, f)) * smoothstep(-0.3, 0.6, 0.35 * fibre + w.x);
-  cov = max(cov, haze * 0.24 * step(0.0, f));
+  a = max(a, haze * 0.24 * step(0.0, f));
 
   float ahead = clamp(f / SPECK_PX, 0.0, 1.0);
   if (f > 0.0 && ahead < 1.0) {
     float sn = gnoise2(css * 0.55 + uSeed * 7.0 + 41.0) * 0.5 + 0.5;
     float th = mix(0.80, 0.96, ahead);
-    cov = max(cov, smoothstep(th, th + 0.04, sn) * 0.75 * (1.0 - ahead));
+    a = max(a, smoothstep(th, th + 0.04, sn) * 0.75 * (1.0 - ahead));
   }
 
-  // "from" stays where there is no ink; ink reveals the live scene (transparent)
-  float a = 1.0 - cov;
-  vec3 col = sampleFrom(devPx) * a; // premultiplied
-
-  // pigment rim pooled at the frontier
-  float rimX = (f + soft * 1.1) / (soft * 1.4 + 1.2);
-  float rim = exp(-rimX * rimX) * inked * 0.45;
-  col = col * (1.0 - rim) + uRimColor * rim;
-  a = a * (1.0 - rim) + rim;
-
-  outColor = vec4(col, a);
+  outColor = vec4(uRimColor * a, a);
 }
 `

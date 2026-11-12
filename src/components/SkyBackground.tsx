@@ -65,10 +65,10 @@ const skyFrag = /* glsl */ `
     // a soft warm sun glow where the moon sits by night, faint grey cloud veils
     if (uDay > 0.5) {
       float th = smoothstep(-0.04, 0.7, abs(h));
-      vec3 day = mix(vec3(1.0, 0.985, 0.955) * 1.55, vec3(0.74, 0.78, 0.82) * 1.45, th);
+      vec3 day = mix(vec3(1.0, 0.985, 0.955) * 1.55, vec3(0.955, 0.945, 0.92) * 1.42, th);
       float sd = max(dot(d, uMoonDir), 0.0);
-      day += vec3(1.0, 0.93, 0.8) * (pow(sd, 10.0) * 0.32 + pow(sd, 60.0) * 0.55);
-      day -= clouds * vec3(0.12, 0.12, 0.11);
+      day += vec3(1.0, 0.72, 0.46) * (pow(sd, 10.0) * 0.10 + pow(sd, 70.0) * 0.26);
+      day -= clouds * vec3(0.07, 0.07, 0.065);
       col = day;
     }
     col += (fract(sin(dot(gl_FragCoord.xy, vec2(12.9898, 78.233))) * 43758.5453) - 0.5) / 400.0;

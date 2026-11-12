@@ -159,7 +159,7 @@ function FogLayer({ layer }: { layer: Layer }) {
     const day = sceneStore.day > 0.5
     uniforms.uColor.value.copy(day ? DAY_FOG : NIGHT_FOG)
     uniforms.uMoonColor.value.copy(day ? DAY_LIGHT : NIGHT_LIGHT)
-    uniforms.uDensity.value = layer.density * (day ? 1.12 : 1)
+    uniforms.uDensity.value = layer.density * (day ? 0.95 : 1)
     // centre-thinning only matters around the hero / finale framing
     const t = sceneStore.cameraT
     uniforms.uCenterThin.value = 1 - Math.min(1, t, Math.max(0, 4 - t))

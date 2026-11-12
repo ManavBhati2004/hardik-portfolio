@@ -91,17 +91,22 @@ const haloFrag = /* glsl */ `
   }
 `
 
-/* Day: a pale sun behind morning haze — warm-white core, wide soft bloom (no hard disc). */
+/* Day: a soft orange morning sun, exactly the moon's size (the quad is 3 radii wide each way,
+   so the disc edge sits at d = 1/3), with a thin warm halo in the haze. */
 const sunFrag = /* glsl */ `
   uniform float uPresence;
   varying vec2 vUv;
   void main() {
     float d = length(vUv - 0.5) * 2.0;            // 0 centre → 1 quad edge
-    float core = 1.0 - smoothstep(0.17, 0.2, d);  // soft-edged disc, veiled
-    float glow = exp(-d * 5.5) * 0.85 + exp(-d * 2.2) * 0.35;
-    vec3 col = vec3(1.0, 0.97, 0.9) * (core * 1.25 + glow);
-    float a = clamp(core * 0.92 + glow, 0.0, 1.0) * smoothstep(1.0, 0.7, d) * uPresence;
-    gl_FragColor = vec4(col * 1.6, a);
+    float r = d * 3.0;                            // 1 = disc edge (moon radius)
+    float core = 1.0 - smoothstep(0.985, 1.005, r);
+    // lighter at the centre, deeper orange toward the limb
+    vec3 disc = mix(vec3(1.22, 0.50, 0.15), vec3(0.98, 0.30, 0.07), smoothstep(0.0, 1.0, r * r));
+    float out_ = max(r - 1.0, 0.0);
+    float glow = exp(-out_ * 5.0) * 0.30 + exp(-out_ * 1.6) * 0.10;
+    vec3 col = disc * core + vec3(1.0, 0.62, 0.34) * glow * (1.0 - core);
+    float a = clamp(core + glow * (1.0 - core), 0.0, 1.0) * smoothstep(1.0, 0.7, d) * uPresence;
+    gl_FragColor = vec4(col, a);
     #include <tonemapping_fragment>
     #include <colorspace_fragment>
   }

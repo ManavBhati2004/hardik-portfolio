@@ -40,7 +40,7 @@ export function PostFX({ quality, focusTarget, day = false }: { quality: Quality
   // a bright misty morning wants a much gentler corner falloff than the night scene
   const vig = day ? { offset: 0.4, darkness: 0.28 } : { offset: 0.28, darkness: 0.62 }
   // the bright day sky must not bloom: only the sun core and steel glints exceed this
-  const bloomT = day ? 2.4 : 1.0
+  const bloomT = day ? 2.6 : 1.0
   // film grain reads as dirt on a bright frame: much lighter by day
   const grain = day ? 0.1 : 1
   if (quality === 'low') {
@@ -68,7 +68,8 @@ export function PostFX({ quality, focusTarget, day = false }: { quality: Quality
         color="black"
       />
       <primitive object={fog} dispose={null} />
-      <DepthOfField target={focusTarget} focalLength={0.06} bokehScale={1.6} height={540} />
+      {/* gentle and at near-full resolution: rocks and shrine stay crisp, only the far distance softens */}
+      <DepthOfField target={focusTarget} focalLength={0.14} bokehScale={0.7} height={900} />
       <Bloom mipmapBlur luminanceThreshold={bloomT} luminanceSmoothing={0.12} intensity={0.38} radius={0.72} />
       <ToneMapping mode={ToneMappingMode.AGX} />
       <Vignette offset={vig.offset} darkness={vig.darkness} />

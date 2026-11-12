@@ -15,66 +15,115 @@
 }
 .gallery-head .section-heading { font-size: var(--fs-xl); margin-top: 1rem; }
 
+.gallery-brush { width: 11rem; margin-top: 0.9rem; }
+
 .gallery-track {
+  position: relative;
+  isolation: isolate;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: clamp(2rem, 4vw, 4.5rem);
-  padding: 14vh var(--gutter) 0 max(var(--gutter), 38vw);
+  padding: 16vh calc(var(--gutter) + 3vw) 0 calc(max(var(--gutter), 38vw) + 3vw);
   width: max-content;
   will-change: transform;
 }
-.gal-frame { flex: none; height: 48vh; display: grid; gap: 1rem; }
-.gal-frame:nth-child(odd) { margin-top: -8vh; }
-.gal-frame:nth-child(3n) { height: 40vh; margin-top: 12vh; }
-.gal-skew { height: 100%; transform-origin: 50% 50%; }
+/* the paper band of the scroll, with dark silk borders along both edges */
+.gal-paper {
+  position: absolute;
+  z-index: -1;
+  left: max(var(--gutter), 38vw);
+  right: var(--gutter);
+  top: 9.5vh;
+  bottom: -5.5vh;
+  border-block: 12px solid var(--brocade);
+  box-shadow: 0 34px 70px -30px var(--paper-shadow);
+}
+/* rollers at both ends */
+.gal-roller {
+  position: absolute;
+  z-index: 1;
+  top: 7.5vh;
+  bottom: -7.5vh;
+  width: 16px;
+  border-radius: 8px;
+  background: linear-gradient(90deg, var(--wood-light), var(--wood) 55%, #140c07);
+  box-shadow: 8px 0 18px -6px var(--paper-shadow);
+}
+.gal-roller::before, .gal-roller::after {
+  content: '';
+  position: absolute;
+  left: -3px;
+  width: 22px;
+  height: 14px;
+  border-radius: 3px;
+  background: linear-gradient(90deg, #8a6a48, #2a1a10 60%, #0f0906);
+}
+.gal-roller::before { top: -8px; }
+.gal-roller::after { bottom: -8px; }
+.gal-roller--start { left: calc(max(var(--gutter), 38vw) - 8px); }
+.gal-roller--end { right: calc(var(--gutter) - 8px); }
+
+.gal-frame { flex: none; display: grid; gap: 0.9rem; }
+.gal-skew { height: 40vh; }
+/* a picture mounted on the paper: thin ink line and a faint silk mat */
 .gal-media {
   position: relative;
   height: 100%;
   aspect-ratio: var(--ar);
   overflow: hidden;
   background: #0a0a0c;
+  box-shadow: 0 0 0 1px rgba(29, 25, 22, 0.6), 0 0 0 7px rgba(74, 23, 22, 0.16);
 }
 .gal-media > * { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
 .gal-cap {
   display: flex;
-  gap: 1rem;
+  align-items: baseline;
+  gap: 0.9rem;
   overflow: hidden;
   font-size: var(--fs-xs);
   letter-spacing: 0.18em;
   text-transform: uppercase;
-  color: var(--smoke);
+  color: var(--paper-ink-muted);
 }
 .gal-cap > span { display: inline-block; }
-.gal-cap-num { color: var(--crimson-glow); }
+.gal-cap-num { color: var(--seal); font-size: 1.05rem; letter-spacing: 0; }
 .gal-end {
   flex: none;
   display: grid;
   place-items: center;
-  width: 30vw;
-  height: 48vh;
+  align-content: center;
+  gap: 1.4rem;
+  width: 22vw;
+  height: 44vh;
   font-family: var(--font-jp);
   font-size: clamp(4rem, 8vw, 7rem);
-  color: rgba(150, 22, 22, 0.4);
+  color: rgba(29, 25, 22, 0.78);
 }
 
 .gallery-progress {
   position: absolute;
   left: var(--gutter);
   right: var(--gutter);
-  bottom: 7vh;
+  bottom: 5vh;
   height: 1px;
   background: rgba(var(--fg-rgb), 0.14);
 }
+/* progress: a brush stroke laid along the hairline */
 .gallery-progress span {
   position: absolute;
-  inset: 0;
-  background: var(--bone);
+  inset: -2px 0;
+  border-radius: 3px 60% 60% 3px / 3px 50% 50% 3px;
+  background: var(--crimson);
   transform-origin: left center;
   transform: scaleX(0);
 }
 
 @media (max-width: 767px) {
-  .gallery-track { padding-left: 8vw; padding-top: 20vh; }
-  .gal-frame { height: 38vh; }
-  .gal-frame:nth-child(3n) { height: 32vh; }
+  .gallery-track { padding-left: 12vw; padding-right: 12vw; padding-top: 24vh; }
+  .gal-paper { left: 6vw; right: 6vw; top: 18vh; }
+  .gal-roller { top: 16vh; }
+  .gal-roller--start { left: calc(6vw - 8px); }
+  .gal-roller--end { right: calc(6vw - 8px); }
+  .gal-skew { height: 32vh; }
+  .gal-end { height: 36vh; width: 40vw; }
 }

@@ -17,7 +17,6 @@ import { PostFX, type QualityTier } from './PostFX'
 import { CAMERA_FOV, CAMERA_PATH, CAMERA_POSITION, LAYER_NO_REFLECT, MOON_POSITION, cameraTToU } from '../scene/config'
 import { emitSceneEvent, onSceneEvent, sceneStore } from '../scene/store'
 import { isMobileViewport } from '../scene/placement'
-import { takePendingCapture } from '../theme/ink/inkOverlay'
 
 // attach the shared vectors the scene publishes into (see scene/store.ts)
 sceneStore.swordTip ??= new THREE.Vector3(0, -1.4, 2)
@@ -106,16 +105,6 @@ function ProgressReporter() {
   return null
 }
 
-/* ─── Theme toggle: hand the just-rendered frame to the ink overlay (runs after the composer) ─── */
-function ThemeCapture() {
-  const gl = useThree((s) => s.gl)
-  useFrame(() => {
-    const cb = takePendingCapture()
-    if (cb) cb(gl.domElement)
-  }, 2)
-  return null
-}
-
 /* dev-only: expose the live root state for visual QA (the last mounted instance wins) */
 function DevHandle() {
   const get = useThree((s) => s.get)
@@ -135,12 +124,13 @@ const NIGHT = {
   moon: { i: 0.55, c: new THREE.Color('#a3241f') },
 }
 const DAY = {
-  fog: new THREE.Color('#e7e3dc'),
-  bg: new THREE.Color('#ece8e1'),
-  ambient: 0.55,
-  key: { i: 2.1, c: new THREE.Color('#fff4e3') },
-  rim: { i: 0.9, c: new THREE.Color('#dfe6ee') },
-  moon: { i: 0.0, c: new THREE.Color('#ffffff') },
+  fog: new THREE.Color('#efebe4'),
+  bg: new THREE.Color('#f2efe8'),
+  ambient: 0.5,
+  // warm morning key, cool sky fill, and the low orange sun as a back light (rims the blade and rocks)
+  key: { i: 2.3, c: new THREE.Color('#ffe8cc') },
+  rim: { i: 0.8, c: new THREE.Color('#d6e2f0') },
+  moon: { i: 1.5, c: new THREE.Color('#ffa765') },
 }
 function DayNightRig({ lights }: { lights: React.RefObject<{ amb: THREE.AmbientLight | null; key: THREE.DirectionalLight | null; rim: THREE.DirectionalLight | null; moon: THREE.DirectionalLight | null }> }) {
   const scene = useThree((s) => s.scene)
@@ -154,7 +144,7 @@ function DayNightRig({ lights }: { lights: React.RefObject<{ amb: THREE.AmbientL
     const fog = scene.fog as THREE.FogExp2 | null
     if (fog) {
       fog.color.copy(p.fog)
-      fog.density = day ? 0.024 : 0.018
+      fog.density = day ? 0.015 : 0.018
     }
     if (scene.background instanceof THREE.Color) scene.background.copy(p.bg)
     if (L.amb) L.amb.intensity = p.ambient
@@ -174,7 +164,6 @@ function SceneContents({ cursorRef, quality }: { cursorRef: CursorRef; quality: 
     <>
       <DevHandle />
       <DayNightRig lights={lights} />
-      <ThemeCapture />
       <CameraRig />
 
       {/* Distance haze for PBR objects: neutral charcoal, same as the horizon */}
@@ -242,7 +231,7 @@ export function Scene3D({ cursorRef }: Scene3DProps) {
   const [active, setActive] = useState(true)
   const [quality, setQuality] = useState<QualityTier>(() => (isMobileViewport() ? 'low' : 'high'))
   const [dpr, setDpr] = useState<number>(() =>
-    Math.min(typeof window !== 'undefined' ? window.devicePixelRatio : 1, isMobileViewport() ? 1.25 : 1.75)
+    Math.min(typeof window !== 'undefined' ? window.devicePixelRatio : 1, isMobileViewport() ? 1.25 : 2)
   )
 
   // The canvas is the backdrop of every section now: pause only when the tab is hidden.
