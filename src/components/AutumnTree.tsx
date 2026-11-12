@@ -5,6 +5,8 @@ import { useGLTF } from '@react-three/drei'
 import { MOON_POSITION } from '../scene/config'
 import { ambientMotion, sceneStore } from '../scene/store'
 import { bakeGeometry } from '../scene/bakeGeometry'
+import { flowerGeometry } from './blossomGeometry'
+import { FallingPetals } from './FallingPetals'
 import { pointAtNdc, isMobileViewport, heroCamera } from '../scene/placement'
 
 /* ─────────────────────────────────────────────────────────────────────────────
@@ -81,6 +83,118 @@ function injectWind(
   }
 }
 
+/* Extra blossoms: instanced flowers placed on outer twigs. Wind is computed from the
+   instance's position (so each flower sways with the twig it sits on) and converted
+   back into the flower's local space. */
+function injectInstancedWind(
+  mat: THREE.MeshPhysicalMaterial,
+  uniforms: { uTime: { value: number }; uWind: { value: number }; uDay: { value: number } }
+) {
+  mat.onBeforeCompile = (shader) => {
+    shader.uniforms.uTime = uniforms.uTime
+    shader.uniforms.uWind = uniforms.uWind
+    shader.uniforms.uDay = uniforms.uDay
+    shader.uniforms.uMoonPos = { value: MOON_POSITION.clone() }
+    shader.vertexShader = shader.vertexShader
+      .replace(
+        '#include <common>',
+        `#include <common>
+         attribute vec4 windData;
+         uniform float uTime;
+         uniform float uWind;
+         varying vec3 vPetalWorld;`
+      )
+      .replace(
+        '#include <begin_vertex>',
+        `#include <begin_vertex>
+         {
+           mat3 im = mat3(instanceMatrix);
+           float s2 = max(dot(im[0], im[0]), 1e-6);
+           vec3 ip = instanceMatrix[3].xyz;
+           float w = windData.r;
+           float sway = w * w;
+           float ph = dot(ip, vec3(0.55, 0.35, 0.25));
+           vec3 windOff = vec3(
+             sin(uTime * 0.47 + ph * 0.9) * 0.055 + sin(uTime * 1.13 + ph * 2.1) * 0.016,
+             sin(uTime * 0.61 + ph * 1.1 + 1.7) * 0.034 + cos(uTime * 1.37 + ph * 1.7) * 0.01,
+             cos(uTime * 0.53 + ph * 0.8 + 0.6) * 0.042
+           ) * sway;
+           windOff *= 0.75 + 0.35 * sin(uTime * 0.13 + 1.2) * sin(uTime * 0.071);
+           // petal flutter (strongest at the petal tips)
+           windOff += vec3(sin(uTime * 2.6 + windData.b * 41.0), cos(uTime * 2.2 + windData.b * 29.0), 0.0)
+                      * 0.004 * (0.4 + w) * length(position.xy);
+           transformed += transpose(im) * (windOff * uWind) / s2;
+         }`
+      )
+      .replace(
+        '#include <worldpos_vertex>',
+        '#include <worldpos_vertex>\n vPetalWorld = (modelMatrix * instanceMatrix * vec4(transformed, 1.0)).xyz;'
+      )
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <common>', '#include <common>\n varying vec3 vPetalWorld;\n uniform vec3 uMoonPos;\n uniform float uDay;')
+      .replace(
+        '#include <emissivemap_fragment>',
+        `#include <emissivemap_fragment>
+         // thin petals glow when the moon / sun is behind them
+         vec3 toL = normalize(uMoonPos - vPetalWorld);
+         vec3 toC = normalize(cameraPosition - vPetalWorld);
+         float back = pow(clamp(dot(-toC, toL), 0.0, 1.0), 2.5);
+         vec3 lightC = mix(vec3(0.62, 0.2, 0.24), vec3(1.0, 0.86, 0.8), uDay);
+         totalEmissiveRadiance += diffuseColor.rgb * lightC * (mix(0.06, 0.16, uDay) + back * 0.35);`
+      )
+  }
+  mat.customProgramCacheKey = () => 'blossom-instanced-wind'
+}
+
+/** Sample outer-twig points on the bark and build flower / bud instances there. */
+function buildBlossomInstances(bark: THREE.BufferGeometry, count: number, seed: number) {
+  const pos = bark.getAttribute('position') as THREE.BufferAttribute
+  const nor = bark.getAttribute('normal') as THREE.BufferAttribute | undefined
+  const wind = bark.getAttribute('windData') as THREE.BufferAttribute
+  let s = seed
+  const rnd = () => ((s = (s * 16807) % 2147483647) - 1) / 2147483646
+  // candidate vertices: outer twigs (high sway weight)
+  const cand: number[] = []
+  for (let i = 0; i < pos.count; i++) if (wind.getX(i) > 0.42) cand.push(i)
+  if (cand.length === 0) for (let i = 0; i < pos.count; i += 7) cand.push(i)
+
+  const matrices: THREE.Matrix4[] = []
+  const colors: THREE.Color[] = []
+  const windData = new Float32Array(count * 4)
+  const p = new THREE.Vector3()
+  const n = new THREE.Vector3()
+  const q = new THREE.Quaternion()
+  const Z = new THREE.Vector3(0, 0, 1)
+  const out = new THREE.Vector3()
+  const blush = new THREE.Color(1.0, 0.8, 0.85)
+  const white = new THREE.Color(1.0, 0.96, 0.97)
+  const deep = new THREE.Color(0.92, 0.52, 0.62)
+  for (let k = 0; k < count; k++) {
+    const i = cand[Math.floor(rnd() * cand.length)]
+    p.fromBufferAttribute(pos, i)
+    if (nor) n.fromBufferAttribute(nor, i).normalize()
+    else n.set(rnd() - 0.5, rnd() - 0.5, 1).normalize()
+    // face outward from the twig, biased toward the viewer (+z) with some randomness
+    out.copy(n).multiplyScalar(0.7).add(new THREE.Vector3(rnd() - 0.5, rnd() - 0.3, 0.9)).normalize()
+    q.setFromUnitVectors(Z, out)
+    q.multiply(new THREE.Quaternion().setFromAxisAngle(Z, rnd() * Math.PI * 2))
+    const bud = rnd() < 0.22
+    const size = bud ? 0.035 + rnd() * 0.02 : 0.07 + rnd() * 0.06
+    p.addScaledVector(n, size * 0.25)
+    const m = new THREE.Matrix4().compose(p.clone(), q.clone(), new THREE.Vector3(size, size, bud ? size * 1.6 : size))
+    matrices.push(m)
+    const r = rnd()
+    colors.push(bud ? deep.clone() : r < 0.18 ? deep.clone().lerp(blush, 0.4) : r < 0.6 ? blush.clone() : white.clone())
+    windData[k * 4] = wind.getX(i)
+    windData[k * 4 + 1] = wind.getY(i)
+    windData[k * 4 + 2] = rnd()
+    windData[k * 4 + 3] = 1
+  }
+  return { matrices, colors, windData }
+}
+
+const EXTRA_BLOSSOMS = 150
+
 export function BlossomBranch() {
   const { scene } = useGLTF('/models/blossom_branch.opt.glb')
   const size = useThree((s) => s.size)
@@ -88,7 +202,7 @@ export function BlossomBranch() {
   const groupRef = useRef<THREE.Group>(null!)
   const offsetRef = useRef<THREE.Group>(null!)
 
-  const uniforms = useMemo(() => ({ uTime: { value: 0 }, uWind: { value: 1 } }), [])
+  const uniforms = useMemo(() => ({ uTime: { value: 0 }, uWind: { value: 1 }, uDay: { value: 0 } }), [])
 
   const parts = useMemo(() => {
     const maxAniso = gl.capabilities.getMaxAnisotropy()
@@ -151,11 +265,11 @@ export function BlossomBranch() {
             .replace(
               '#include <map_fragment>',
               `#include <map_fragment>
-               // per-blossom tint: mostly crimson-rose, some pale, a few deep red
+               // per-blossom tint: soft blush pink → near-white, a few deeper pink (no saturated red)
                float r = vWindData.b;
-               vec3 tintA = vec3(1.0, 0.55, 0.6);
-               vec3 tintB = vec3(0.85, 0.16, 0.2);
-               vec3 tintC = vec3(1.0, 0.86, 0.88);
+               vec3 tintA = vec3(1.0, 0.78, 0.83);
+               vec3 tintB = vec3(0.92, 0.5, 0.6);
+               vec3 tintC = vec3(1.0, 0.95, 0.96);
                vec3 tint = r < 0.62 ? mix(tintB, tintA, r / 0.62) : mix(tintA, tintC, (r - 0.62) / 0.38);
                diffuseColor.rgb *= tint;`
             )
@@ -166,7 +280,7 @@ export function BlossomBranch() {
                vec3 toMoon = normalize(uMoonPos - vPetalWorld);
                vec3 toCamW = normalize(cameraPosition - vPetalWorld);
                float back = pow(clamp(dot(-toCamW, toMoon), 0.0, 1.0), 3.0);
-               totalEmissiveRadiance += diffuseColor.rgb * vec3(0.55, 0.12, 0.12) * (0.05 + back * 0.22);`
+               totalEmissiveRadiance += diffuseColor.rgb * vec3(0.62, 0.22, 0.26) * (0.06 + back * 0.32);`
             )
         })
       }
@@ -175,6 +289,36 @@ export function BlossomBranch() {
     })
     return out
   }, [scene, uniforms, gl])
+
+  // denser clusters: instanced blossoms and buds along the outer twigs
+  const extra = useMemo(() => {
+    const bark = parts.find((p) => p.name.includes('bark'))
+    if (!bark) return null
+    const geo = flowerGeometry()
+    const { matrices, colors, windData } = buildBlossomInstances(bark.geometry, EXTRA_BLOSSOMS, 9173)
+    geo.setAttribute('windData', new THREE.InstancedBufferAttribute(windData, 4))
+    const mat = new THREE.MeshPhysicalMaterial({
+      vertexColors: true,
+      roughness: 0.58,
+      metalness: 0,
+      sheen: 0.7,
+      sheenColor: new THREE.Color('#f6c6cf'),
+      sheenRoughness: 0.45,
+      side: THREE.DoubleSide,
+      envMapIntensity: 0.55,
+    })
+    injectInstancedWind(mat, uniforms)
+    const mesh = new THREE.InstancedMesh(geo, mat, matrices.length)
+    matrices.forEach((m, i) => {
+      mesh.setMatrixAt(i, m)
+      mesh.setColorAt(i, colors[i])
+    })
+    mesh.instanceMatrix.needsUpdate = true
+    if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true
+    mesh.frustumCulled = false
+    mesh.receiveShadow = true
+    return mesh
+  }, [parts, uniforms])
 
   // Composition: root just outside the upper-left corner, bough reaching right and down
   // (against the fixed hero camera so the live camera journey never re-places it)
@@ -191,6 +335,7 @@ export function BlossomBranch() {
   useFrame((_, rawDelta) => {
     const delta = Math.min(rawDelta, 0.05)
     uniforms.uTime.value += delta * ambientMotion()
+    uniforms.uDay.value = sceneStore.day
     const t = sceneStore.cameraT
     const journeyAway = THREE.MathUtils.smoothstep(t, 0.05, 0.9) * (1 - THREE.MathUtils.smoothstep(t, 3.25, 3.95))
     const target = Math.max(1 - sceneStore.branchIn, journeyAway)
@@ -209,7 +354,9 @@ export function BlossomBranch() {
           {parts.map((p, i) => (
             <mesh key={i} geometry={p.geometry} material={p.material} receiveShadow castShadow={false} frustumCulled={false} />
           ))}
+          {extra && <primitive object={extra} />}
         </group>
+        <FallingPetals />
       </group>
     </group>
   )

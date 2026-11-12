@@ -2,10 +2,8 @@ import { useLayoutEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { useGLTF } from '@react-three/drei'
 import { Rocks, type RockPlacement } from './Rocks'
-import { WATER_Y } from '../scene/config'
+import { TORII_XZ, WATER_Y } from '../scene/config'
 
-/** Where the torii stands (x, z); its height is found on the rock surface below. */
-const TORII_XZ = new THREE.Vector2(8.45, -8.6)
 
 /* ───────────────────────────────────────────────────────────────────────────
    Uploaded Torii model on the far-right cliff (existing feature kept).
@@ -80,10 +78,11 @@ const ROCKS: RockPlacement[] = [
   { model: 'cliff', position: [16, WATER_Y - 0.4, -17], rotation: [0, -2.4, 0], scale: 0.22, tone: 0.41 },
   // right foreground slab
   { model: 'boulder02', position: [3.0, WATER_Y - 0.24, 0.8], rotation: [0, 2.85, 0], scale: [1.9, 0.62, 1.3], tone: 0.61 },
-  { model: 'boulder01', position: [1.35, WATER_Y - 0.1, 3.0], rotation: [0, 1.2, 0], scale: [0.32, 0.22, 0.32], tone: 0.57 },
+  // (the close-up boulders use the cleaner namaqualand scan: the low-res boulder_01 speckled up close)
+  { model: 'boulder02', position: [1.35, WATER_Y - 0.12, 3.0], rotation: [0, 1.2, 0], scale: [0.36, 0.2, 0.3], tone: 0.57 },
   // left foreground group
   { model: 'coast05', position: [-3.9, WATER_Y - 0.32, 2.4], rotation: [0, -0.6, 0], scale: [0.72, 0.4, 0.72], tone: 0.54 },
-  { model: 'boulder01', position: [-2.0, WATER_Y - 0.15, 3.5], rotation: [0, 2.4, 0], scale: [0.45, 0.32, 0.45], tone: 0.59 },
+  { model: 'boulder02', position: [-2.0, WATER_Y - 0.16, 3.5], rotation: [0, 2.4, 0], scale: [0.48, 0.28, 0.42], tone: 0.59 },
   { model: 'boulder02', position: [-5.6, WATER_Y - 0.22, -0.6], rotation: [0, 0.4, 0], scale: 0.85, tone: 0.49 },
   // distant low shoreline on the left, mostly in the fog
   { model: 'coast01', position: [-16, WATER_Y - 0.15, -20], rotation: [0, 0.6, 0], scale: 0.16, tone: 0.41 },

@@ -10,9 +10,14 @@
     <!-- Display face is self-hosted and preloaded so the title never swaps late -->
     <link rel="preload" href="/fonts/cormorant-garamond-300.woff2" as="font" type="font/woff2" crossorigin />
     <link rel="preload" href="/fonts/cormorant-garamond-400.woff2" as="font" type="font/woff2" crossorigin />
+    <script>
+      // apply the remembered theme before first paint (dark by default)
+      try { if (localStorage.getItem('hg-theme') === 'light') document.documentElement.dataset.theme = 'light' } catch (e) {}
+    </script>
     <style>
-      /* critical: black stage before any JS/CSS so there is never a flash */
+      /* critical: stage colour before any JS/CSS so there is never a flash */
       html, body { background: #030304; margin: 0; }
+      html[data-theme='light'], html[data-theme='light'] body { background: #f3f0ea; }
     </style>
   </head>
   <body>

@@ -7,7 +7,7 @@ gsap.registerPlugin(SplitText)
 
 /* ─────────────────────────────────────────────────────────────────────────────
    Hero intro — one master timeline (times relative to the end of the fog parting):
-   0.0 moon at full presence, ring fades in and drifts
+   0.0 moon at full presence
    0.2 katana rises out of the water (2.4 s, tip first)
    0.6 blossom branch eases in from beyond the top-left corner
    1.0 giant 侍 ink-brush reveal
@@ -18,7 +18,7 @@ gsap.registerPlugin(SplitText)
    2.2 button border draws around the rectangle, then label + arrow
    2.3 nav drops in
    2.5 vertical 暁の刃 top → bottom, then its line
-   2.8 scroll indicator + counter
+   2.8 counter
    ───────────────────────────────────────────────────────────────────────────── */
 
 const q = <T extends Element = HTMLElement>(name: string) => Array.from(document.querySelectorAll<T>(`[data-intro="${name}"]`))
@@ -43,7 +43,7 @@ export async function startIntro() {
     document.querySelectorAll('[data-intro]').forEach((el) => gsap.set(el, { visibility: 'visible', opacity: 0 }))
     gsap
       .timeline({ onComplete: () => void (sceneStore.introDone = true) })
-      .to(sceneStore, { ringPresence: 1, katanaRise: 1, branchIn: 1, duration: 0.6, ease: 'none' }, 0)
+      .to(sceneStore, { katanaRise: 1, branchIn: 1, duration: 0.6, ease: 'none' }, 0)
       .to('[data-intro]', { opacity: 1, duration: 0.6, ease: 'power1.out' }, 0)
       .add(() => document.documentElement.classList.add('intro-done'))
     return
@@ -62,7 +62,6 @@ export async function startIntro() {
   })
 
   /* 3D */
-  tl.to(sceneStore, { ringPresence: 1, duration: 2.2, ease: 'power2.out' }, 0)
   tl.to(sceneStore, { katanaRise: 1, duration: 2.4, ease: 'none' }, 0.2) // Katana applies expo.out itself
   tl.to(sceneStore, { branchIn: 1, duration: 1.8, ease: 'power3.out' }, 0.6)
 
@@ -149,7 +148,7 @@ export async function startIntro() {
   }
 
   /* scroll indicator + counter */
-  const tail = [...q('scroll'), ...q('hud')]
+  const tail = q('hud')
   gsap.set(tail, { opacity: 0 })
   tl.add(() => reveal(tail), 2.8)
   tl.to(tail, { opacity: 1, duration: 1.2, ease: 'power2.out', stagger: 0.1 }, 2.8)

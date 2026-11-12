@@ -13,6 +13,9 @@ import { getLenis } from '../hooks/useScrollProgress'
       parts horizontally from the centre (1.6 s, shader uniform) as the moon fades in.
    3. Hands off straight into the hero intro timeline.
    ───────────────────────────────────────────────────────────────────────────── */
+/** The stage colour (night or day) at zero alpha, for fading the solid backdrop away. */
+const clearBg = () => `rgba(${getComputedStyle(document.documentElement).getPropertyValue('--bg-rgb').trim() || '3, 3, 4'}, 0)`
+
 export function Preloader({ webgl }: { webgl: boolean }) {
   const rootRef = useRef<HTMLDivElement>(null!)
   const countRef = useRef<HTMLSpanElement>(null!)
@@ -77,7 +80,7 @@ export function Preloader({ webgl }: { webgl: boolean }) {
       })
         .to(root.querySelectorAll('.preloader-mark, .preloader-count'), { opacity: 0, duration: 0.4, ease: 'power2.out' }, '+=0.15')
         .addLabel('part')
-        .to(root, { backgroundColor: 'rgba(3,3,4,0)', duration: 0.3, ease: 'none' }, 'part')
+        .to(root, { backgroundColor: clearBg(), duration: 0.3, ease: 'none' }, 'part')
         .to(sceneStore, { fogPart: 1, duration: 1.6, ease: 'power3.inOut' }, 'part')
         .to(sceneStore, { moonPresence: 1, duration: 1.7, ease: 'power2.inOut' }, 'part+=0.25')
         .add(() => void startIntro(), 'part+=1.6')
@@ -95,7 +98,7 @@ export function Preloader({ webgl }: { webgl: boolean }) {
 
     // the mist veil is drawn by WebGL from the first frame: lift the solid black then
     const offCanvas = onSceneEvent('canvas', () => {
-      gsap.to(root, { backgroundColor: 'rgba(3,3,4,0.0)', duration: 0.9, ease: 'power1.inOut', delay: 0.15 })
+      gsap.to(root, { backgroundColor: clearBg(), duration: 0.9, ease: 'power1.inOut', delay: 0.15 })
     })
     const offReady = onSceneEvent('ready', finish)
     if (sceneStore.ready) finish()

@@ -1,0 +1,29 @@
+.theme-toggle {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: 1px solid rgba(var(--fg-rgb), 0.55);
+  color: var(--bone);
+  transition: border-color var(--dur-micro), background-color var(--dur-micro), transform 0.18s var(--ease-out-quart);
+}
+.theme-toggle:hover { border-color: var(--bone); background: rgba(var(--fg-rgb), 0.05); }
+.theme-toggle:active { transform: scale(0.95); }
+.theme-toggle svg { width: 20px; height: 20px; overflow: visible; }
+.theme-toggle-body { fill: currentColor; }
+.theme-toggle-rays line { stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; }
+
+/* the ink overlay sits above the whole page (as in the reference): the frozen old screen
+   is eaten away by the ink to reveal the live page in the new theme */
+.ink-canvas {
+  position: fixed;
+  z-index: 75;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+}
+.ink-canvas.is-active { visibility: visible; }

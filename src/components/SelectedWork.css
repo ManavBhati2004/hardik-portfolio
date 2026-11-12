@@ -42,7 +42,7 @@
   position: absolute;
   inset: 0;
   opacity: 0;
-  background: linear-gradient(180deg, rgba(3, 3, 4, 0.05), rgba(3, 3, 4, 0.55));
+  background: linear-gradient(180deg, rgba(var(--bg-rgb), 0.05), rgba(var(--bg-rgb), 0.55));
   pointer-events: none;
 }
 .work-card-view {
@@ -65,7 +65,7 @@
   place-items: center;
   width: 44px;
   height: 44px;
-  border: 1px solid rgba(234, 231, 226, 0.6);
+  border: 1px solid rgba(var(--fg-rgb), 0.6);
   border-radius: 50%;
 }
 .work-card-view-icon svg { width: 14px; height: 14px; margin-left: 2px; }
@@ -95,7 +95,7 @@
   font-weight: 300;
   font-size: clamp(2rem, 3vw, 3rem);
   line-height: 0.9;
-  color: rgba(234, 231, 226, 0.4);
+  color: rgba(var(--fg-rgb), 0.4);
 }
 .work-card-meta { display: grid; gap: 0.35rem; }
 .work-card-title {

@@ -42,6 +42,14 @@
   --smoke: #8d8984;
   --hairline: rgba(234, 231, 226, 0.16);
   --hairline-strong: rgba(234, 231, 226, 0.55);
+  /* theme-aware rgb triplets: foreground ink / background stage */
+  --fg-rgb: 234, 231, 226;
+  --bg-rgb: 3, 3, 4;
+  --kanji-faded: rgba(150, 22, 22, 0.42);
+  --vignette: rgba(0, 0, 0, 0.55);
+  --scrollbar: #2a2729;
+  --wash-a: rgba(110, 16, 16, 0.78);
+  --wash-b: rgba(80, 12, 14, 0.6);
 
   /* ── Typography ── */
   --font-display: 'Cormorant Garamond', 'Cormorant', Georgia, serif;
@@ -77,4 +85,36 @@
   --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
   --dur-micro: 0.32s;
   --dur-reveal: 1.1s;
+}
+
+/* ── Day theme: misty ink-wash morning (sumi-e) ── */
+:root[data-theme='light'] {
+  --void: #f3f0ea;
+  --night: #ece8e0;
+  --obsidian: #e4dfd6;
+  --ash: #d8d2c8;
+  --crimson: #a51c1b;
+  --crimson-deep: #7c1514;
+  --crimson-glow: #b8261f;
+  --bone: #151416;
+  --bone-muted: #3b383a;
+  --smoke: #6c6763;
+  --hairline: rgba(21, 20, 22, 0.16);
+  --hairline-strong: rgba(21, 20, 22, 0.55);
+  --fg-rgb: 21, 20, 22;
+  --bg-rgb: 243, 240, 234;
+  --kanji-faded: rgba(165, 28, 27, 0.3);
+  --vignette: rgba(214, 208, 198, 0.55);
+  --scrollbar: #c9c2b7;
+  --wash-a: rgba(165, 28, 27, 0.16);
+  --wash-b: rgba(165, 28, 27, 0.08);
+  color-scheme: light;
+}
+
+/* CSS fallback (reduced motion / no WebGL2): a plain cross-fade */
+html.theme-fade body *,
+html.theme-fade body {
+  transition-property: color, background-color, border-color, fill, stroke !important;
+  transition-duration: var(--theme-fade, 0.45s) !important;
+  transition-delay: 0s !important;
 }

@@ -63,7 +63,7 @@
   right: var(--gutter);
   bottom: 7vh;
   height: 1px;
-  background: rgba(234, 231, 226, 0.14);
+  background: rgba(var(--fg-rgb), 0.14);
 }
 .gallery-progress span {
   position: absolute;

@@ -8,7 +8,7 @@ import type * as THREE from 'three'
    - scroll hook        → scrollY, progress, heroProgress, velocity
    - section triggers   → cameraT, section, dim, katanaSink, katanaFinale, fogThicken
    - preloader          → fogPart, moonPresence
-   - intro timeline     → katanaRise, ringPresence, branchIn, introDone
+   - intro timeline     → katanaRise, branchIn, introDone
    - WarmUp (in Canvas) → ready
    ───────────────────────────────────────────────────────────────────────────── */
 
@@ -43,8 +43,6 @@ export interface SceneStore {
   fogPart: number
   /** Moon presence 0 → 1 (fade + brighten). */
   moonPresence: number
-  /** Moon ring presence 0 → 1 (brightens slightly above 1 in the finale). */
-  ringPresence: number
   /** Blossom branch intro 0 (off-frame) → 1 (in place). */
   branchIn: number
   /** Katana intro rise 0 (under water) → 1 (rest). */
@@ -54,6 +52,8 @@ export interface SceneStore {
   /** Katana finale rise at Contact 0 → 1. */
   katanaFinale: number
 
+  /** Theme: 0 night, 1 day (written by theme/theme.ts; flips under the ink overlay). */
+  day: number
   /** Real asset loading progress 0..100 (from the loading manager). */
   loadProgress: number
   /** Assets loaded and shaders compiled. */
@@ -93,12 +93,12 @@ export const sceneStore: SceneStore = {
 
   fogPart: 0,
   moonPresence: 0,
-  ringPresence: 0,
   branchIn: 0,
   katanaRise: 0,
   katanaSink: 0,
   katanaFinale: 0,
 
+  day: 0,
   loadProgress: 0,
   ready: false,
   introStarted: false,

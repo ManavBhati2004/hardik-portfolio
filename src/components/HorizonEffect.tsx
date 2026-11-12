@@ -2,7 +2,7 @@ import { useMemo } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import { HORIZON_COLOR, LAYER_NO_REFLECT, MOON_POSITION, WATER_Y } from '../scene/config'
-import { ambientMotion } from '../scene/store'
+import { ambientMotion, sceneStore } from '../scene/store'
 import { linkUniforms } from '../scene/linkUniforms'
 
 /* ─────────────────────────────────────────────────────────────────────────────
@@ -43,6 +43,11 @@ const frag = /* glsl */ `
   }
 `
 
+const NIGHT_BAND = HORIZON_COLOR.clone().multiplyScalar(1.6)
+const DAY_BAND = new THREE.Color(1.0, 0.98, 0.95).multiplyScalar(1.5)
+const NIGHT_GLOW = new THREE.Color('#2a0606')
+const DAY_GLOW = new THREE.Color(0.12, 0.08, 0.03)
+
 export function HorizonEffect() {
   const uniforms = useMemo(
     () => ({
@@ -56,6 +61,10 @@ export function HorizonEffect() {
 
   useFrame((_, delta) => {
     uniforms.uTime.value += Math.min(delta, 0.05) * ambientMotion()
+    // day: pale haze band, warm glow under the sun instead of crimson
+    const day = sceneStore.day > 0.5
+    uniforms.uColor.value.copy(day ? DAY_BAND : NIGHT_BAND)
+    uniforms.uMoonGlow.value.copy(day ? DAY_GLOW : NIGHT_GLOW)
   })
 
   return (

@@ -5,7 +5,6 @@ import * as THREE from 'three'
 import { Katana } from './Katana'
 import { Water } from './Water'
 import { RedMoon } from './RedMoon'
-import { MoonRing } from './MoonRing'
 import { SkyBackground } from './SkyBackground'
 import { BlossomBranch } from './AutumnTree'
 import { FallingLeaves } from './FallingLeaves'
@@ -15,9 +14,10 @@ import { HorizonEffect } from './HorizonEffect'
 import { SceneEnvironment } from './SceneEnvironment'
 import { FogVeil } from './FogVeil'
 import { PostFX, type QualityTier } from './PostFX'
-import { CAMERA_FOV, CAMERA_PATH, CAMERA_POSITION, LAYER_NO_REFLECT, MOON_POSITION } from '../scene/config'
+import { CAMERA_FOV, CAMERA_PATH, CAMERA_POSITION, LAYER_NO_REFLECT, MOON_POSITION, cameraTToU } from '../scene/config'
 import { emitSceneEvent, onSceneEvent, sceneStore } from '../scene/store'
 import { isMobileViewport } from '../scene/placement'
+import { takePendingCapture } from '../theme/ink/inkOverlay'
 
 // attach the shared vectors the scene publishes into (see scene/store.ts)
 sceneStore.swordTip ??= new THREE.Vector3(0, -1.4, 2)
@@ -53,9 +53,9 @@ function CameraRig() {
     const delta = Math.min(rawDelta, 0.05)
     const st = s.current
     // reduced motion: no camera journey (stays on the hero framing)
-    const goal = sceneStore.reducedMotion ? 0 : THREE.MathUtils.clamp(sceneStore.cameraT, 0, CAMERA_PATH.length - 1)
+    const goal = sceneStore.reducedMotion ? 0 : THREE.MathUtils.clamp(sceneStore.cameraT, 0, CAMERA_PATH[CAMERA_PATH.length - 1].t)
     st.t = THREE.MathUtils.damp(st.t, goal, 2.6, delta)
-    const u = st.t / (CAMERA_PATH.length - 1)
+    const u = cameraTToU(st.t)
     curves.pos.getPoint(u, st.pos)
     curves.target.getPoint(u, st.target)
     camera.position.copy(st.pos)
@@ -106,6 +106,16 @@ function ProgressReporter() {
   return null
 }
 
+/* ─── Theme toggle: hand the just-rendered frame to the ink overlay (runs after the composer) ─── */
+function ThemeCapture() {
+  const gl = useThree((s) => s.gl)
+  useFrame(() => {
+    const cb = takePendingCapture()
+    if (cb) cb(gl.domElement)
+  }, 2)
+  return null
+}
+
 /* dev-only: expose the live root state for visual QA (the last mounted instance wins) */
 function DevHandle() {
   const get = useThree((s) => s.get)
@@ -115,11 +125,56 @@ function DevHandle() {
   return null
 }
 
+/* ─── Day / night lighting rig: lights, distance haze and backdrop follow sceneStore.day ─── */
+const NIGHT = {
+  fog: new THREE.Color('#0d0b0d'),
+  bg: new THREE.Color('#030304'),
+  ambient: 0.03,
+  key: { i: 1.35, c: new THREE.Color('#dfe5ee') },
+  rim: { i: 1.1, c: new THREE.Color('#b8c2d0') },
+  moon: { i: 0.55, c: new THREE.Color('#a3241f') },
+}
+const DAY = {
+  fog: new THREE.Color('#e7e3dc'),
+  bg: new THREE.Color('#ece8e1'),
+  ambient: 0.55,
+  key: { i: 2.1, c: new THREE.Color('#fff4e3') },
+  rim: { i: 0.9, c: new THREE.Color('#dfe6ee') },
+  moon: { i: 0.0, c: new THREE.Color('#ffffff') },
+}
+function DayNightRig({ lights }: { lights: React.RefObject<{ amb: THREE.AmbientLight | null; key: THREE.DirectionalLight | null; rim: THREE.DirectionalLight | null; moon: THREE.DirectionalLight | null }> }) {
+  const scene = useThree((s) => s.scene)
+  const last = useRef(-1)
+  useFrame(() => {
+    const day = sceneStore.day > 0.5 ? 1 : 0
+    if (day === last.current) return
+    last.current = day
+    const p = day ? DAY : NIGHT
+    const L = lights.current
+    const fog = scene.fog as THREE.FogExp2 | null
+    if (fog) {
+      fog.color.copy(p.fog)
+      fog.density = day ? 0.024 : 0.018
+    }
+    if (scene.background instanceof THREE.Color) scene.background.copy(p.bg)
+    if (L.amb) L.amb.intensity = p.ambient
+    if (L.key) { L.key.intensity = p.key.i; L.key.color.copy(p.key.c) }
+    if (L.rim) { L.rim.intensity = p.rim.i; L.rim.color.copy(p.rim.c) }
+    if (L.moon) { L.moon.intensity = p.moon.i; L.moon.color.copy(p.moon.c) }
+  })
+  return null
+}
+
 /* ─── Inner scene contents (must be inside Canvas) ─── */
 function SceneContents({ cursorRef, quality }: { cursorRef: CursorRef; quality: QualityTier }) {
+  const [day, setDay] = useState(sceneStore.day > 0.5)
+  useEffect(() => onSceneEvent('theme', () => setDay(sceneStore.day > 0.5)), [])
+  const lights = useRef<{ amb: THREE.AmbientLight | null; key: THREE.DirectionalLight | null; rim: THREE.DirectionalLight | null; moon: THREE.DirectionalLight | null }>({ amb: null, key: null, rim: null, moon: null })
   return (
     <>
       <DevHandle />
+      <DayNightRig lights={lights} />
+      <ThemeCapture />
       <CameraRig />
 
       {/* Distance haze for PBR objects: neutral charcoal, same as the horizon */}
@@ -129,10 +184,11 @@ function SceneContents({ cursorRef, quality }: { cursorRef: CursorRef; quality: 
       <SceneEnvironment />
 
       {/* Restrained physical lighting */}
-      <ambientLight intensity={0.03} color="#c8ccd4" />
+      <ambientLight ref={(l) => void (lights.current.amb = l)} intensity={0.03} color="#c8ccd4" />
 
       {/* Cool key from above-right: shapes the sword, tops of rocks; casts soft shadows */}
       <directionalLight
+        ref={(l) => void (lights.current.key = l)}
         position={[5, 7, 6]}
         intensity={1.35}
         color="#dfe5ee"
@@ -150,10 +206,11 @@ function SceneContents({ cursorRef, quality }: { cursorRef: CursorRef; quality: 
       />
 
       {/* Grazing rim from behind-right: reveals rock contours and blade edge */}
-      <directionalLight position={[7, 2.2, -6]} intensity={1.1} color="#b8c2d0" />
+      <directionalLight ref={(l) => void (lights.current.rim = l)} position={[7, 2.2, -6]} intensity={1.1} color="#b8c2d0" />
 
       {/* Moonlight: dim crimson from the moon direction */}
       <directionalLight
+        ref={(l) => void (lights.current.moon = l)}
         position={[MOON_POSITION.x, MOON_POSITION.y + 2, MOON_POSITION.z]}
         intensity={0.55}
         color="#a3241f"
@@ -165,7 +222,6 @@ function SceneContents({ cursorRef, quality }: { cursorRef: CursorRef; quality: 
       <Suspense fallback={null}>
         <SkyBackground />
         <RedMoon />
-        <MoonRing />
         <Katana cursorRef={cursorRef} />
         <Water cursorRef={cursorRef} />
         <BlossomBranch />
@@ -176,7 +232,7 @@ function SceneContents({ cursorRef, quality }: { cursorRef: CursorRef; quality: 
         <WarmUp />
       </Suspense>
 
-      <PostFX quality={quality} focusTarget={sceneStore.swordCenter} />
+      <PostFX quality={quality} focusTarget={sceneStore.swordCenter} day={day} />
     </>
   )
 }

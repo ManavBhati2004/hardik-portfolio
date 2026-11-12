@@ -16,7 +16,6 @@ const ROCK_FILES = {
   coast05: '/models/rocks/coast_rocks_05.opt.glb',
   cliff: '/models/rocks/coastal_cliff_04.opt.glb',
   boulder02: '/models/rocks/namaqualand_boulder_02.opt.glb',
-  boulder01: '/models/rocks/boulder_01.opt.glb',
 } as const
 type RockKey = keyof typeof ROCK_FILES
 
@@ -32,39 +31,95 @@ export interface RockPlacement {
 }
 
 function gradeMaterial(src: THREE.MeshStandardMaterial, tone: number, maxAniso: number) {
-  const mat = src.clone()
+  // physical material: clearcoat gives the wet band a real glossy film
+  const mat = new THREE.MeshPhysicalMaterial({
+    map: src.map,
+    normalMap: src.normalMap,
+    roughnessMap: src.roughnessMap,
+    clearcoat: 1,
+    clearcoatRoughness: 0.16,
+  })
   mat.color = new THREE.Color(tone, tone * 0.98, tone * 1.0)
   mat.metalness = 0
   mat.roughness = 1
   mat.envMapIntensity = 0.75
-  mat.normalScale = new THREE.Vector2(1.35, 1.35)
+  // the scans' own normals are 1K: keep them at natural strength (over-driving them caused
+  // the speckled look up close) and add procedural micro-detail in the shader instead
+  mat.normalScale = new THREE.Vector2(1.0, 1.0)
   mat.side = THREE.FrontSide
   for (const t of [mat.map, mat.normalMap, mat.roughnessMap]) if (t) t.anisotropy = maxAniso
   mat.onBeforeCompile = (shader) => {
     shader.uniforms.uWaterY = { value: WATER_Y }
     shader.vertexShader = shader.vertexShader
-      .replace('#include <common>', '#include <common>\nvarying vec3 vRockWorld;')
+      .replace('#include <common>', '#include <common>\nvarying vec3 vRockWorld;\nvarying vec3 vRockNormalW;')
       .replace(
         '#include <worldpos_vertex>',
-        '#include <worldpos_vertex>\nvRockWorld = (modelMatrix * vec4(transformed, 1.0)).xyz;'
+        '#include <worldpos_vertex>\nvRockWorld = (modelMatrix * vec4(transformed, 1.0)).xyz;\nvRockNormalW = normalize(mat3(modelMatrix) * objectNormal);'
       )
     shader.fragmentShader = shader.fragmentShader
-      .replace('#include <common>', '#include <common>\nvarying vec3 vRockWorld;\nuniform float uWaterY;')
+      .replace('#include <common>', `#include <common>
+         varying vec3 vRockWorld;
+         varying vec3 vRockNormalW;
+         uniform float uWaterY;
+         float rh(vec3 p) { p = fract(p * 0.3183099 + 0.1); p *= 17.0; return fract(p.x * p.y * p.z * (p.x + p.y + p.z)); }
+         float rn(vec3 x) {
+           vec3 i = floor(x), f = fract(x);
+           f = f * f * (3.0 - 2.0 * f);
+           return mix(mix(mix(rh(i), rh(i + vec3(1,0,0)), f.x), mix(rh(i + vec3(0,1,0)), rh(i + vec3(1,1,0)), f.x), f.y),
+                      mix(mix(rh(i + vec3(0,0,1)), rh(i + vec3(1,0,1)), f.x), mix(rh(i + vec3(0,1,1)), rh(i + vec3(1,1,1)), f.x), f.y), f.z);
+         }
+         float rfbm(vec3 p) { float v = 0.0, a = 0.5; for (int i = 0; i < 4; i++) { v += a * rn(p); p = p * 2.07 + 5.3; a *= 0.5; } return v; }`)
       .replace(
         '#include <map_fragment>',
         `#include <map_fragment>
          // grade the scan toward cool graphite (keep a little of the original variation)
          float rl = dot(diffuseColor.rgb, vec3(0.299, 0.587, 0.114));
          diffuseColor.rgb = mix(vec3(rl) * vec3(0.96, 0.97, 1.0), diffuseColor.rgb, 0.22);
-         // wet band just above the waterline: darker albedo
-         float wet = 1.0 - smoothstep(uWaterY + 0.02, uWaterY + 0.32, vRockWorld.y);
-         diffuseColor.rgb *= mix(1.0, 0.42, wet);`
+         // wet band just above the waterline: darker albedo, with a ragged upper edge
+         float wetEdge = 0.34 + (rfbm(vRockWorld * 3.0) - 0.5) * 0.2;
+         float wet = 1.0 - smoothstep(uWaterY + 0.02, uWaterY + wetEdge, vRockWorld.y);
+         diffuseColor.rgb *= mix(1.0, 0.38, wet);
+         // moss / lichen: on up-facing surfaces and in hollows, never in the wet band
+         float up = smoothstep(0.35, 0.85, vRockNormalW.y);
+         float mossN = rfbm(vRockWorld * 2.2 + 7.0);
+         float moss = up * smoothstep(0.5, 0.72, mossN) * (1.0 - wet) * 0.7;
+         vec3 mossC = mix(vec3(0.13, 0.16, 0.09), vec3(0.24, 0.26, 0.16), rn(vRockWorld * 9.0));
+         diffuseColor.rgb = mix(diffuseColor.rgb, mossC, moss);
+         // pale lichen flecks on the exposed tops
+         float lichen = up * smoothstep(0.62, 0.78, rfbm(vRockWorld * 4.5 + 3.0)) * (1.0 - wet) * 0.18;
+         diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * 1.25 + vec3(0.04, 0.045, 0.035), lichen);`
       )
       .replace(
         '#include <roughnessmap_fragment>',
         `#include <roughnessmap_fragment>
          roughnessFactor = clamp(roughnessFactor * 1.05, 0.62, 1.0);
-         roughnessFactor = mix(roughnessFactor, 0.48, wet);`
+         roughnessFactor = mix(roughnessFactor, 0.36, wet);
+         roughnessFactor = mix(roughnessFactor, 0.95, moss);`
+      )
+      .replace(
+        '#include <normal_fragment_maps>',
+        `#include <normal_fragment_maps>
+         {
+           // procedural micro-detail (pits and grain) on top of the scanned normal map
+           // fade the detail out when a pixel covers more than the detail scale (no sparkle/aliasing)
+           float footprint = length(fwidth(vRockWorld));
+           float detailK = 1.0 - smoothstep(0.012, 0.04, footprint);
+           float hd = rfbm(vRockWorld * 12.0);
+           vec2 dHdxy = vec2(dFdx(hd), dFdy(hd)) * 0.35 * detailK;
+           vec3 sx = dFdx(-vViewPosition);
+           vec3 sy = dFdy(-vViewPosition);
+           vec3 r1 = cross(sy, normal);
+           vec3 r2 = cross(normal, sx);
+           float det = dot(sx, r1) * faceDirection;
+           vec3 g = sign(det) * (dHdxy.x * r1 + dHdxy.y * r2);
+           normal = normalize(abs(det) * normal - g);
+         }`
+      )
+      .replace(
+        '#include <lights_physical_fragment>',
+        `#include <lights_physical_fragment>
+         // the glossy water film only exists in the wet band
+         material.clearcoat *= wet;`
       )
   }
   return mat

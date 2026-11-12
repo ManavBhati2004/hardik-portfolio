@@ -91,6 +91,22 @@ const haloFrag = /* glsl */ `
   }
 `
 
+/* Day: a pale sun behind morning haze — warm-white core, wide soft bloom (no hard disc). */
+const sunFrag = /* glsl */ `
+  uniform float uPresence;
+  varying vec2 vUv;
+  void main() {
+    float d = length(vUv - 0.5) * 2.0;            // 0 centre → 1 quad edge
+    float core = 1.0 - smoothstep(0.17, 0.2, d);  // soft-edged disc, veiled
+    float glow = exp(-d * 5.5) * 0.85 + exp(-d * 2.2) * 0.35;
+    vec3 col = vec3(1.0, 0.97, 0.9) * (core * 1.25 + glow);
+    float a = clamp(core * 0.92 + glow, 0.0, 1.0) * smoothstep(1.0, 0.7, d) * uPresence;
+    gl_FragColor = vec4(col * 1.6, a);
+    #include <tonemapping_fragment>
+    #include <colorspace_fragment>
+  }
+`
+
 export function RedMoon() {
   const camera = useThree((s) => s.camera)
   const moonRef = useRef<THREE.Mesh>(null!)
@@ -117,6 +133,8 @@ export function RedMoon() {
     []
   )
   const placement = useMoonPlacement()
+  const sunRef = useRef<THREE.Mesh>(null!)
+  const sunUniforms = useMemo(() => ({ uPresence: { value: 0 } }), [])
 
   useFrame((_, delta) => {
     // slow, continuous, single-axis rotation (independent of input)
@@ -127,6 +145,13 @@ export function RedMoon() {
     const presence = p * p * (3 - 2 * p)
     uniforms.uExposure.value = 0.5 * presence * (1 - sceneStore.dim * 0.35) * (1 + 0.12 * sceneStore.katanaFinale)
     haloUniforms.uPresence.value = presence
+    // day ↔ night: moon and its halo by night, hazy sun by day
+    const day = sceneStore.day > 0.5
+    moonRef.current.visible = !day
+    haloRef.current.visible = !day
+    sunRef.current.visible = day
+    sunRef.current.quaternion.copy(camera.quaternion)
+    sunUniforms.uPresence.value = presence * (1 - sceneStore.dim * 0.3)
   })
 
   return (
@@ -147,6 +172,17 @@ export function RedMoon() {
           vertexShader={haloVert}
           fragmentShader={haloFrag}
           uniforms={haloUniforms} ref={linkUniforms(haloUniforms)}
+          transparent
+          depthWrite={false}
+        />
+      </mesh>
+      {/* day sun (same placement as the moon) */}
+      <mesh ref={sunRef} renderOrder={1} visible={false} onUpdate={(self) => self.layers.set(LAYER_NO_REFLECT)}>
+        <planeGeometry args={[MOON_RADIUS * 6, MOON_RADIUS * 6]} />
+        <shaderMaterial
+          vertexShader={haloVert}
+          fragmentShader={sunFrag}
+          uniforms={sunUniforms} ref={linkUniforms(sunUniforms)}
           transparent
           depthWrite={false}
         />

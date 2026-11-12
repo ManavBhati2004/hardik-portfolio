@@ -9,7 +9,7 @@
 .po-backdrop {
   position: fixed;
   inset: 0;
-  background: radial-gradient(circle at 30% 20%, rgba(80, 12, 14, 0.35), transparent 60%), rgba(3, 3, 4, 0.96);
+  background: radial-gradient(circle at 30% 20%, rgba(80, 12, 14, 0.35), transparent 60%), rgba(var(--bg-rgb), 0.96);
 }
 .po-close {
   position: fixed;

@@ -2,7 +2,7 @@ import { useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import { HORIZON_COLOR, LAYER_NO_REFLECT, MOON_POSITION, SKY_ZENITH } from '../scene/config'
-import { ambientMotion } from '../scene/store'
+import { ambientMotion, sceneStore } from '../scene/store'
 import { linkUniforms } from '../scene/linkUniforms'
 
 /* ─────────────────────────────────────────────────────────────────────────────
@@ -31,6 +31,7 @@ const skyFrag = /* glsl */ `
   uniform vec3 uZenith;
   uniform vec3 uHorizon;
   uniform vec3 uMoonDir;
+  uniform float uDay;
   varying vec3 vDir;
 
   float hash(vec3 p) { p = fract(p * 0.3183099 + 0.1); p *= 17.0; return fract(p.x * p.y * p.z * (p.x + p.y + p.z)); }
@@ -60,6 +61,16 @@ const skyFrag = /* glsl */ `
     // broad, very faint lunar glow in the sky
     col += vec3(0.03, 0.004, 0.004) * pow(max(dot(d, uMoonDir), 0.0), 40.0) * 0.5;
 
+    // day: misty ink-wash morning — off-white haze at the horizon, pale grey-blue above,
+    // a soft warm sun glow where the moon sits by night, faint grey cloud veils
+    if (uDay > 0.5) {
+      float th = smoothstep(-0.04, 0.7, abs(h));
+      vec3 day = mix(vec3(1.0, 0.985, 0.955) * 1.55, vec3(0.74, 0.78, 0.82) * 1.45, th);
+      float sd = max(dot(d, uMoonDir), 0.0);
+      day += vec3(1.0, 0.93, 0.8) * (pow(sd, 10.0) * 0.32 + pow(sd, 60.0) * 0.55);
+      day -= clouds * vec3(0.12, 0.12, 0.11);
+      col = day;
+    }
     col += (fract(sin(dot(gl_FragCoord.xy, vec2(12.9898, 78.233))) * 43758.5453) - 0.5) / 400.0;
     gl_FragColor = vec4(col, 1.0);
     #include <tonemapping_fragment>
@@ -88,8 +99,10 @@ const starVert = /* glsl */ `
 `
 
 const starFrag = /* glsl */ `
+  uniform float uNight;
   varying float vAlpha;
   void main() {
+    if (uNight < 0.5) discard; // no stars by day
     float d = length(gl_PointCoord - 0.5);
     float core = smoothstep(0.5, 0.0, d);
     gl_FragColor = vec4(vec3(0.85, 0.86, 0.9) * 1.4, core * core * vAlpha);
@@ -131,6 +144,7 @@ function Stars() {
       uniforms: {
         uTime: { value: 0 },
         uPixelRatio: { value: Math.min(typeof window !== 'undefined' ? window.devicePixelRatio : 1, 2) },
+        uNight: { value: 1 },
       },
     }
   }, [])
@@ -138,6 +152,7 @@ function Stars() {
   useFrame((_, delta) => {
     const d = Math.min(delta, 0.05) * ambientMotion()
     uniforms.uTime.value += d
+    uniforms.uNight.value = 1 - sceneStore.day
     // extremely slow drift — the sky feels alive without visible motion
     groupRef.current.rotation.y += d * 0.0022
     groupRef.current.rotation.z = Math.sin(uniforms.uTime.value * 0.01) * 0.01
@@ -164,6 +179,7 @@ export function SkyBackground() {
       uZenith: { value: SKY_ZENITH.clone() },
       uHorizon: { value: HORIZON_COLOR.clone() },
       uMoonDir: { value: MOON_POSITION.clone().normalize() },
+      uDay: { value: 0 },
     }),
     []
   )
@@ -171,6 +187,7 @@ export function SkyBackground() {
   useFrame((_, delta) => {
     // sky layer rotates slowly in one direction, independent of the moon
     uniforms.uAngle.value += Math.min(delta, 0.05) * 0.004 * ambientMotion()
+    uniforms.uDay.value = sceneStore.day
   })
 
   return (

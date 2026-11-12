@@ -29,7 +29,7 @@
   width: 4vw;
   min-width: 48px;
   height: 1px;
-  background: rgba(234, 231, 226, 0.18);
+  background: rgba(var(--fg-rgb), 0.18);
   overflow: hidden;
 }
 .hud-line-fill {

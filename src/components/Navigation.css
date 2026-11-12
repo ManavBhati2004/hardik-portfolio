@@ -16,7 +16,7 @@
   position: absolute;
   inset: 0;
   z-index: -1;
-  background: linear-gradient(rgba(3, 3, 4, 0.72), rgba(3, 3, 4, 0.35));
+  background: linear-gradient(rgba(var(--bg-rgb), 0.72), rgba(var(--bg-rgb), 0.35));
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
   opacity: 0;
@@ -87,23 +87,31 @@
   pointer-events: none;
 }
 
-.nav-cta {
+/* toggle + Enquire share the old Enquire anchor (right 8.2%) */
+.nav-actions {
   position: absolute;
   right: 8.2%;
   top: 50%;
-  margin-top: -21px;
+  translate: 0 -50%;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  z-index: 60;
+}
+.nav-cta {
+  position: relative;
   height: 42px;
   display: inline-flex;
   align-items: center;
   gap: 0.45rem;
   padding: 0 1.7rem;
-  border: 1px solid rgba(234, 231, 226, 0.55);
+  border: 1px solid rgba(var(--fg-rgb), 0.55);
   border-radius: 999px;
   font-size: clamp(13px, 0.9vw, 15px);
   color: var(--bone);
   transition: border-color var(--dur-micro), background-color var(--dur-micro);
 }
-.nav-cta:hover { border-color: var(--bone); background: rgba(234, 231, 226, 0.04); }
+.nav-cta:hover { border-color: var(--bone); background: rgba(var(--fg-rgb), 0.04); }
 
 .nav-menu-btn { display: none; }
 
@@ -117,7 +125,7 @@
   flex-direction: column;
   justify-content: center;
   padding: 0 8vw;
-  background: radial-gradient(circle at 70% 30%, rgba(110, 16, 16, 0.35), transparent 55%), #050507;
+  background: radial-gradient(circle at 70% 30%, rgba(110, 16, 16, 0.35), transparent 55%), var(--void);
 }
 .menu ul { list-style: none; display: grid; gap: 0.6rem; }
 .menu-item button { overflow: hidden; display: block; text-align: left; padding: 0.2rem 0; }
@@ -151,6 +159,8 @@
   .nav { padding: 0 6vw; }
   .nav-brand { left: 6vw; }
   .nav-links, .nav-cta { display: none; }
+  /* on phones the toggle sits just left of the menu button */
+  .nav-actions { right: calc(4vw + 52px); }
   .nav-menu-btn {
     position: absolute;
     right: 4vw;

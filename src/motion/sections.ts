@@ -41,7 +41,6 @@ export function setupSections(): () => void {
   ScrollTrigger.addEventListener('refresh', measure)
 
   let lastSection = -1
-  let scrollHintGone = false
 
   // re-measure whenever the document height changes (late images, lazy layout, resizes)
   let lastHeight = 0
@@ -68,22 +67,15 @@ export function setupSections(): () => void {
 
     sceneStore.katanaSink = smooth(0.12, 0.85, y / vh)
     sceneStore.katanaFinale = clamp01((t - 3.3) / 0.7)
-    sceneStore.fogThicken = Math.max(0, 1 - Math.abs(t - 1))
-    sceneStore.dim = smooth(0.3, 1, t) * (1 - smooth(3.2, 3.9, t)) * 0.6 + Math.max(0, 1 - Math.abs(t - 2)) * 0.4
+    // fog swells while the camera travels low over the water, then thins at the shrine so the torii reads
+    sceneStore.fogThicken = Math.max(0, 1 - Math.abs(t - 0.5) * 2.2) * 0.8
+    sceneStore.dim = smooth(0.3, 1, t) * (1 - smooth(3.2, 3.9, t)) * 0.45 + Math.max(0, 1 - Math.abs(t - 2)) * 0.45
 
     const section = Math.min(SECTION_IDS.length - 1, Math.round(t))
     if (section !== lastSection) {
       lastSection = section
       sceneStore.section = section
       emitSceneEvent('section')
-    }
-
-    if (!scrollHintGone && y > 40) {
-      scrollHintGone = true
-      gsap.to('.hero-scroll > *', { opacity: 0, duration: 0.6, ease: 'power2.out' })
-    } else if (scrollHintGone && y < 10 && sceneStore.introDone) {
-      scrollHintGone = false
-      gsap.to('.hero-scroll > *', { opacity: 1, duration: 0.8, ease: 'power2.out' })
     }
   }
   gsap.ticker.add(tick)

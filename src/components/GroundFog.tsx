@@ -69,11 +69,16 @@ const fogFrag = /* glsl */ `
     float t = uTime;
     // advect the whole field with the wind; slow curl-like warp makes the wisps evolve
     vec2 q = p - uWind * uScale * t;
+    // upright banks roll: a slow vertical billow travelling along the bank
+    q.y += (sin(q.x * 0.55 + t * 0.21 + uSeed) * 0.32 + sin(q.x * 1.3 - t * 0.13) * 0.12) * uVertical;
     vec2 warp = vec2(fbm(q * 0.55 + vec2(0.0, t * 0.035)), fbm(q * 0.55 + vec2(5.2, -t * 0.03)));
     float n = fbm(q + (warp - 0.5) * 2.2);
+    // large slow masses underneath the wisps give the fog volume and depth
+    float mass = fbm(q * 0.42 + vec2(3.1, -1.7) - vec2(t * 0.012, 0.0));
+    n = mix(n, n * 0.55 + mass * 0.6, 0.45);
     // slow density breathing
     n += 0.06 * sin(t * 0.11 + uSeed);
-    float d = smoothstep(0.42, 0.86, n);
+    float d = smoothstep(0.38, 0.82, n);
 
     // soft layer bounds (no visible plane edges)
     float e = smoothstep(0.0, 0.22, vUv.x) * smoothstep(1.0, 0.78, vUv.x)
@@ -90,9 +95,11 @@ const fogFrag = /* glsl */ `
     // lighting: neutral grey mist, warmed by the moon toward its direction
     vec3 toMoon = normalize(uMoonPos - vWorld);
     vec3 toCam = normalize(cameraPosition - vWorld);
-    float forward = pow(clamp(dot(-toCam, toMoon), 0.0, 1.0), 6.0);
+    float forward = pow(clamp(dot(-toCam, toMoon), 0.0, 1.0), 4.0) * 1.25;
     float lateral = exp(-pow((vWorld.x - uMoonPos.x) / 5.0, 2.0));
-    vec3 col = uColor * (0.75 + 0.35 * n) + uMoonColor * (forward * 0.9 + lateral * 0.25);
+    // denser cores read darker and cooler (self-shadowed), thin edges catch the light
+    float core = smoothstep(0.55, 0.95, n);
+    vec3 col = uColor * (0.68 + 0.45 * n) * mix(1.0, 0.82, core) + uMoonColor * (forward * 0.9 + lateral * 0.25) * (1.0 - core * 0.5);
 
     // dither (prevents banding in thin mist)
     a += (fract(sin(dot(gl_FragCoord.xy, vec2(12.9898, 78.233))) * 43758.5453) - 0.5) / 255.0;
@@ -114,21 +121,16 @@ interface Layer {
 
 /* Layers ordered back → front. Winds differ in speed/direction so layers slide past each other. */
 const LAYERS: Layer[] = [
-  // far upright banks along the horizon (hide the waterline softly)
+  // Only the far horizon banks remain as planes: they sit beyond the volumetric fog's
+  // march distance and soften the far waterline. Everything nearer is the raymarched
+  // volume (VolumetricFog.ts), which wraps the rocks instead of slicing through them.
   { position: [0, WATER_Y + 1.3, -26], size: [90, 3.4], vertical: true, wind: [0.22, 0], scale: 0.09, density: 0.62, seed: 3.1 },
-  { position: [6, WATER_Y + 1.1, -16], size: [60, 2.8], vertical: true, wind: [0.3, 0], scale: 0.13, density: 0.5, seed: 7.4 },
-  // mid banks drifting behind the rocks
-  { position: [-4, WATER_Y + 0.9, -9], size: [40, 2.3], vertical: true, wind: [0.36, 0], scale: 0.18, density: 0.51, seed: 12.8 },
-  { position: [7, WATER_Y + 0.85, -5], size: [24, 2.4], vertical: true, wind: [0.4, 0], scale: 0.22, density: 0.6, seed: 19.2 },
-  // horizontal sheets hugging the water
-  { position: [0, WATER_Y + 0.05, -15], size: [70, 26], vertical: false, wind: [0.34, 0.05], scale: 0.16, density: 0.42, seed: 23.7 },
-  { position: [0, WATER_Y + 0.28, -8], size: [50, 16], vertical: false, wind: [0.42, -0.04], scale: 0.24, density: 0.26, seed: 31.5 },
-  { position: [0, WATER_Y + 0.55, -4], size: [36, 10], vertical: false, wind: [0.5, 0.06], scale: 0.3, density: 0.16, seed: 42.9 },
-  // wisps curling up the right cliff around the torii
-  { position: [6.6, WATER_Y + 1.7, -7.2], size: [10, 3.8], vertical: true, wind: [0.22, 0], scale: 0.34, density: 0.4, seed: 64.1 },
-  // thin foreground wisps around the base of the rocks and the blade tip
-  { position: [0, WATER_Y + 0.14, 0.5], size: [26, 6], vertical: false, wind: [0.55, 0.02], scale: 0.38, density: 0.14, seed: 57.3 },
-]
+  { position: [6, WATER_Y + 1.1, -16], size: [60, 2.8], vertical: true, wind: [0.3, 0], scale: 0.13, density: 0.5, seed: 7.4 },]
+
+const NIGHT_FOG = new THREE.Color('#8d8a90').multiplyScalar(0.62)
+const NIGHT_LIGHT = new THREE.Color('#7a1012').multiplyScalar(0.6)
+const DAY_FOG = new THREE.Color(0.95, 0.94, 0.92).multiplyScalar(1.3)
+const DAY_LIGHT = new THREE.Color(0.26, 0.2, 0.12)
 
 function FogLayer({ layer }: { layer: Layer }) {
   const uniforms = useMemo(
@@ -153,6 +155,11 @@ function FogLayer({ layer }: { layer: Layer }) {
     // time-driven only: keeps flowing when the page is idle
     uniforms.uTime.value += Math.min(delta, 0.05) * ambientMotion()
     uniforms.uThicken.value = sceneStore.fogThicken
+    // day: luminous off-white morning mist with a warm sun bias; night: grey with crimson moonlight
+    const day = sceneStore.day > 0.5
+    uniforms.uColor.value.copy(day ? DAY_FOG : NIGHT_FOG)
+    uniforms.uMoonColor.value.copy(day ? DAY_LIGHT : NIGHT_LIGHT)
+    uniforms.uDensity.value = layer.density * (day ? 1.12 : 1)
     // centre-thinning only matters around the hero / finale framing
     const t = sceneStore.cameraT
     uniforms.uCenterThin.value = 1 - Math.min(1, t, Math.max(0, 4 - t))

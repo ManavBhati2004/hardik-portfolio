@@ -86,7 +86,27 @@ const waterFrag = /* glsl */ `
   uniform vec3 uKeyDir;
   uniform vec3 uHorizon;
   uniform float uMotion;
+  uniform float uDay;
   varying vec3 vWorld;
+
+  // gentle wind ripples: gradient of drifting value noise (two scales, two directions)
+  float h21(vec2 p) { p = fract(p * vec2(233.34, 851.73)); p += dot(p, p + 23.45); return fract(p.x * p.y); }
+  float vn(vec2 p) {
+    vec2 i = floor(p), f = fract(p);
+    vec2 u = f * f * (3.0 - 2.0 * f);
+    return mix(mix(h21(i), h21(i + vec2(1, 0)), u.x), mix(h21(i + vec2(0, 1)), h21(i + vec2(1, 1)), u.x), u.y);
+  }
+  vec2 windGrad(vec2 p, float t) {
+    const float e = 0.06;
+    vec2 g = vec2(0.0);
+    vec2 a = p * 1.7 + vec2(t * 0.32, t * 0.11);
+    vec2 b = p * 4.1 + vec2(-t * 0.47, t * 0.29);
+    g += vec2(vn(a + vec2(e, 0.0)) - vn(a - vec2(e, 0.0)), vn(a + vec2(0.0, e)) - vn(a - vec2(0.0, e))) * 0.10;
+    g += vec2(vn(b + vec2(e, 0.0)) - vn(b - vec2(e, 0.0)), vn(b + vec2(0.0, e)) - vn(b - vec2(0.0, e))) * 0.05;
+    // gusts: patches of the lake ruffle while others stay glassy
+    float gust = smoothstep(0.35, 0.75, vn(p * 0.18 + vec2(t * 0.05, -t * 0.03)));
+    return g * (0.45 + 0.85 * gust);
+  }
 
   // small directional wind waves → normal perturbation (time-driven, never pointer-driven)
   vec2 waveGrad(vec2 p, float t) {
@@ -111,7 +131,10 @@ const waterFrag = /* glsl */ `
 
     // wind waves fade with distance (avoids shimmer/aliasing near the horizon)
     float lod = clamp(1.0 - dist / 45.0, 0.15, 1.0);
-    vec2 grad = waveGrad(vWorld.xz, uTime) * lod * uMotion;
+    // the fine wind ripples fade out with distance well before they would alias into
+    // moiré bands at grazing angles near the horizon
+    float near = 1.0 - smoothstep(6.0, 22.0, dist);
+    vec2 grad = (waveGrad(vWorld.xz, uTime) * mix(1.0, 1.45, near) + windGrad(vWorld.xz, uTime) * near) * lod * uMotion;
 
     // interactive ripples from the height-field simulation
     vec2 ruv = (vWorld.xz - uRippleMin) / uRippleSize;
@@ -127,7 +150,7 @@ const waterFrag = /* glsl */ `
     // ── reflection: projective lookup into the mirrored render, bent by the surface normal
     vec4 rc = uTextureMatrix * vec4(vWorld, 1.0);
     vec2 suv = rc.xy / rc.w;
-    vec2 distort = N.xz * (0.055 + 0.02 * smoothstep(4.0, 20.0, dist));
+    vec2 distort = N.xz * (0.075 + 0.025 * smoothstep(4.0, 20.0, dist));
     suv += distort;
     // slight roughness blur (4 taps) — calm water, not a perfect mirror
     vec2 bl = vec2(0.0012, 0.0024) * (1.0 + dist * 0.04);
@@ -142,19 +165,21 @@ const waterFrag = /* glsl */ `
     float F = 0.02 + 0.98 * pow(1.0 - NdotV, 5.0);
     float reflAmt = clamp(F * 1.35 + 0.18, 0.0, 0.92);
 
-    vec3 body = vec3(0.0035, 0.0032, 0.0040);
+    vec3 body = mix(vec3(0.0035, 0.0032, 0.0040), vec3(0.34, 0.39, 0.43), uDay);
     vec3 col = mix(body, refl, reflAmt);
 
     // ── GGX moon glints on the ripples (restrained crimson)
     vec3 Lm = normalize(uMoonPos - vWorld);
     vec3 Hm = normalize(Lm + V);
     float spec = D_GGX(clamp(dot(N, Hm), 0.0, 1.0), 0.12) * F;
-    col += vec3(0.55, 0.06, 0.05) * spec * 0.16;
+    // night: restrained crimson glints from the moon; day: warm-white sparkle from the sun
+    col += mix(vec3(0.55, 0.06, 0.05) * 0.2, vec3(1.0, 0.95, 0.85) * 0.5, uDay) * spec;
 
     // cool key-light sparkle on near ripples
     vec3 Hk = normalize(uKeyDir + V);
     float sk = D_GGX(clamp(dot(N, Hk), 0.0, 1.0), 0.08) * F;
-    col += vec3(0.75, 0.8, 0.9) * sk * 0.035 * lod;
+    // key-light sparkle on near ripples (tight lobe → small twinkling glints)
+    col += vec3(0.75, 0.8, 0.9) * sk * mix(0.06, 0.12, uDay) * lod;
 
     // ── distance fade into the shared horizon haze (no hard seam)
     float haze = 1.0 - exp(-pow(dist * 0.032, 1.6));
@@ -168,6 +193,8 @@ const waterFrag = /* glsl */ `
     #include <colorspace_fragment>
   }
 `
+
+const DAY_HORIZON = new THREE.Color(0.95, 0.94, 0.92).multiplyScalar(1.25)
 
 export function Water({ cursorRef }: WaterProps) {
   const gl = useThree((s) => s.gl)
@@ -259,6 +286,7 @@ export function Water({ cursorRef }: WaterProps) {
       uKeyDir: { value: new THREE.Vector3(5, 7, 6).normalize() },
       uHorizon: { value: HORIZON_COLOR.clone() },
       uMotion: { value: 1 },
+      uDay: { value: 0 },
     }),
     [reflection, sim]
   )
@@ -303,6 +331,8 @@ export function Water({ cursorRef }: WaterProps) {
     tmp.time += dt * motion
     uniforms.uTime.value = tmp.time
     uniforms.uMotion.value = motion
+    uniforms.uDay.value = sceneStore.day
+    uniforms.uHorizon.value.copy(sceneStore.day > 0.5 ? DAY_HORIZON : HORIZON_COLOR)
 
     /* pointer → water plane */
     const drop = sim.material.uniforms.uDrop.value as THREE.Vector4

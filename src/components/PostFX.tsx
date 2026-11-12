@@ -1,4 +1,7 @@
+import { useEffect, useMemo } from 'react'
 import * as THREE from 'three'
+import { useThree } from '@react-three/fiber'
+import { VolumetricFogEffect } from './VolumetricFog'
 import {
   EffectComposer,
   N8AO,
@@ -23,14 +26,31 @@ export type QualityTier = 'high' | 'low'
    Low tier (phones, or slow desktops after the fps sample) drops the two
    expensive passes — AO and DoF — and keeps the look-defining ones.
    ───────────────────────────────────────────────────────────────────────────── */
-export function PostFX({ quality, focusTarget }: { quality: QualityTier; focusTarget: THREE.Vector3 }) {
+export function PostFX({ quality, focusTarget, day = false }: { quality: QualityTier; focusTarget: THREE.Vector3; day?: boolean }) {
+  // raymarched volumetric mist (24 steps; 12 on the low tier)
+  const camera = useThree((s) => s.camera) as THREE.PerspectiveCamera
+  const fog = useMemo(() => new VolumetricFogEffect(camera, 24), [camera])
+  useEffect(() => fog.setSteps(quality === 'low' ? 12 : 24), [fog, quality])
+  useEffect(() => {
+    // dev-only handle on the MOUNTED instance (for live tuning in the browser)
+    if (import.meta.env.DEV) (window as unknown as { __fog: VolumetricFogEffect }).__fog = fog
+    return () => fog.dispose()
+  }, [fog])
+
+  // a bright misty morning wants a much gentler corner falloff than the night scene
+  const vig = day ? { offset: 0.4, darkness: 0.28 } : { offset: 0.28, darkness: 0.62 }
+  // the bright day sky must not bloom: only the sun core and steel glints exceed this
+  const bloomT = day ? 2.4 : 1.0
+  // film grain reads as dirt on a bright frame: much lighter by day
+  const grain = day ? 0.1 : 1
   if (quality === 'low') {
     return (
       <EffectComposer multisampling={0} frameBufferType={THREE.HalfFloatType}>
-        <Bloom mipmapBlur luminanceThreshold={1.0} luminanceSmoothing={0.12} intensity={0.34} radius={0.65} />
+        <primitive object={fog} dispose={null} />
+        <Bloom mipmapBlur luminanceThreshold={bloomT} luminanceSmoothing={0.12} intensity={0.34} radius={0.65} />
         <ToneMapping mode={ToneMappingMode.AGX} />
-        <Vignette offset={0.28} darkness={0.62} />
-        <Noise premultiply opacity={0.28} blendFunction={BlendFunction.SOFT_LIGHT} />
+        <Vignette offset={vig.offset} darkness={vig.darkness} />
+        <Noise premultiply opacity={0.28 * grain} blendFunction={BlendFunction.SOFT_LIGHT} />
         <SMAA />
       </EffectComposer>
     )
@@ -47,11 +67,12 @@ export function PostFX({ quality, focusTarget }: { quality: QualityTier; focusTa
         intensity={2.4}
         color="black"
       />
+      <primitive object={fog} dispose={null} />
       <DepthOfField target={focusTarget} focalLength={0.06} bokehScale={1.6} height={540} />
-      <Bloom mipmapBlur luminanceThreshold={1.0} luminanceSmoothing={0.12} intensity={0.38} radius={0.72} />
+      <Bloom mipmapBlur luminanceThreshold={bloomT} luminanceSmoothing={0.12} intensity={0.38} radius={0.72} />
       <ToneMapping mode={ToneMappingMode.AGX} />
-      <Vignette offset={0.28} darkness={0.62} />
-      <Noise premultiply opacity={0.32} blendFunction={BlendFunction.SOFT_LIGHT} />
+      <Vignette offset={vig.offset} darkness={vig.darkness} />
+      <Noise premultiply opacity={0.32 * grain} blendFunction={BlendFunction.SOFT_LIGHT} />
       <SMAA />
     </EffectComposer>
   )

@@ -52,20 +52,45 @@ export const HERO_LAYOUT = {
 /** Katana sits this far from the camera (world units). */
 export const KATANA_DISTANCE = 6.1
 
-/* ─── Camera journey keyframes (cameraT = 0..4) ─── */
+/** The torii on the right headland (x, z); its height is found on the rock below. */
+export const TORII_XZ = new THREE.Vector2(8.45, -8.6)
+/** Centre of the gate, used to aim the shrine close-up (y set to the planted gate in Environment). */
+export const TORII_FOCUS = new THREE.Vector3(8.39, -0.45, -8.56)
+
+/* ─── Camera journey keyframes ───
+   `t` is the section progress (cameraT 0..4) at which the camera reaches the key.
+   Hero → Craftsmanship (0 → 1): push in toward the blade, then glide right to a
+   close-up of the shrine. Later sections continue from there. */
 export interface CameraKey {
+  t: number
   pos: THREE.Vector3
   target: THREE.Vector3
 }
 export const CAMERA_PATH: CameraKey[] = [
   // 0 hero
-  { pos: CAMERA_POSITION.clone(), target: CAMERA_TARGET.clone() },
-  // 1 craft — dolly forward and down to the waterline
-  { pos: new THREE.Vector3(-0.4, -1.75, 5.6), target: new THREE.Vector3(-0.2, -1.55, -4) },
-  // 2 legacy — lateral glide along the waterline past the right cliff / torii
-  { pos: new THREE.Vector3(3.6, -1.55, 4.2), target: new THREE.Vector3(5.6, -1.0, -8) },
-  // 3 gallery — tilt up toward the sky, stars and ring become the backdrop
-  { pos: new THREE.Vector3(1.2, -1.2, 6.4), target: new THREE.Vector3(0.4, 3.8, -8) },
+  { t: 0, pos: CAMERA_POSITION.clone(), target: CAMERA_TARGET.clone() },
+  // zoom in: dolly forward and slightly down, still looking at the blade / water
+  { t: 0.4, pos: new THREE.Vector3(0.7, -1.3, 5.4), target: new THREE.Vector3(1.6, -0.85, -2.5) },
+  // 1 craft — shrine close-up: just above the foreground slab (its top is y ≈ −1.46), about
+  // 3.7 units from the gate (≈ a third of the frame tall); aimed slightly left of the gate
+  // so the torii sits right of centre, clear of the Craftsmanship copy on the left
+  { t: 1, pos: new THREE.Vector3(6.55, -0.2, -5.35), target: new THREE.Vector3(8.09, -0.47, -8.73) },
+  // 2 legacy — drift along the headland past the shrine
+  { t: 2, pos: new THREE.Vector3(7.6, -1.25, -1.8), target: new THREE.Vector3(10.5, -0.6, -11) },
+  // 3 gallery — pull back and tilt up toward the sky
+  { t: 3, pos: new THREE.Vector3(2.4, -1.2, 5.2), target: new THREE.Vector3(0.8, 3.8, -8) },
   // 4 contact — back near the hero framing
-  { pos: new THREE.Vector3(0.15, -1.05, 8.6), target: new THREE.Vector3(0.1, -0.35, 0) },
+  { t: 4, pos: new THREE.Vector3(0.15, -1.05, 8.6), target: new THREE.Vector3(0.1, -0.35, 0) },
 ]
+
+/** cameraT (0..4) → curve parameter u (0..1) so the camera hits each key exactly at its `t`. */
+export function cameraTToU(t: number): number {
+  const n = CAMERA_PATH.length
+  if (t <= CAMERA_PATH[0].t) return 0
+  for (let i = 0; i < n - 1; i++) {
+    const a = CAMERA_PATH[i].t
+    const b = CAMERA_PATH[i + 1].t
+    if (t <= b) return (i + (t - a) / (b - a)) / (n - 1)
+  }
+  return 1
+}

@@ -83,7 +83,7 @@
   /* the finale katana rises behind the links on phones: give them a quiet glass panel */
   .contact-links {
     padding: 0.4rem 1.1rem;
-    background: rgba(5, 5, 7, 0.62);
+    background: rgba(var(--bg-rgb), 0.62);
     backdrop-filter: blur(10px);
     -webkit-backdrop-filter: blur(10px);
     border: 1px solid var(--hairline);

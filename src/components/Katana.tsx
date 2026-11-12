@@ -32,21 +32,25 @@ const TAU = Math.PI * 2
 const DOWN = new THREE.Vector3(0, -1, 0)
 
 /* ─── Restrained crimson gradient toward the tip (moon + water bounce) ─── */
+/** 1 by night (crimson toward the tip), 0 by day (polished steel). Shared by every blade material. */
+const bladeTintAmount = { value: 1 }
+
 function addBladeGradient(mat: THREE.MeshPhysicalMaterial) {
   mat.onBeforeCompile = (shader) => {
     shader.uniforms.uBladeTint = { value: new THREE.Color(1.0, 0.12, 0.1) }
+    shader.uniforms.uBladeAmt = bladeTintAmount
     shader.vertexShader = shader.vertexShader
       .replace('#include <common>', '#include <common>\n varying float vBladeY;')
       .replace('#include <begin_vertex>', '#include <begin_vertex>\n vBladeY = position.y;')
     shader.fragmentShader = shader.fragmentShader
-      .replace('#include <common>', '#include <common>\n varying float vBladeY;\n uniform vec3 uBladeTint;')
+      .replace('#include <common>', '#include <common>\n varying float vBladeY;\n uniform vec3 uBladeTint;\n uniform float uBladeAmt;')
       .replace(
         '#include <lights_fragment_end>',
         `#include <lights_fragment_end>
          {
            // 0 at the upper blade → 1 at the tip (lower third reads crimson)
            float bw = smoothstep(${(BLADE_Y * 0.36).toFixed(3)}, ${(BLADE_Y * 0.97).toFixed(3)}, vBladeY);
-           bw = pow(bw, 1.25);
+           bw = pow(bw, 1.25) * uBladeAmt;
            vec3 tint = mix(vec3(1.0), uBladeTint * 1.55, bw);
            reflectedLight.directSpecular *= tint;
            reflectedLight.indirectSpecular *= tint;
@@ -198,7 +202,7 @@ export function Katana({ cursorRef }: KatanaProps) {
       poses.current.hero
     )
     // finale: more upright, a little closer to centre, between the heading and the links
-    solvePose(keyCamera(4, aspect), mobile ? { x: 55, y: 26 } : { x: 51.5, y: 22 }, mobile ? { x: 52, y: 72 } : { x: 48.5, y: 80 }, poses.current.finale)
+    solvePose(keyCamera(CAMERA_PATH.length - 1, aspect), mobile ? { x: 55, y: 26 } : { x: 51.5, y: 22 }, mobile ? { x: 52, y: 72 } : { x: 48.5, y: 80 }, poses.current.finale)
   }, [size])
 
   useFrame((_, rawDelta) => {
@@ -248,7 +252,10 @@ export function Katana({ cursorRef }: KatanaProps) {
     tiltRef.current.rotation.set(s.tiltX, 0, s.tiltZ)
     tiltRef.current.position.set(s.driftX, s.driftY, 0)
 
-    /* 4. Publish tip / guard positions for the water and depth of field */
+    /* 4. Day: polished steel (no crimson); night: crimson toward the tip */
+    bladeTintAmount.value = 1 - sceneStore.day
+
+    /* 5. Publish tip / guard positions for the water and depth of field */
     tipRef.current.getWorldPosition(sceneStore.swordTip)
     guardRef.current.getWorldPosition(sceneStore.swordCenter)
   })

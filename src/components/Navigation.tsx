@@ -4,6 +4,7 @@ import './Navigation.css'
 import { getLenis } from '../hooks/useScrollProgress'
 import { slashTo } from '../motion/slash'
 import { onSceneEvent, sceneStore } from '../scene/store'
+import { ThemeToggle } from '../theme/ThemeToggle'
 
 export const NAV_ITEMS = [
   { label: 'The Blade', id: 'hero' },
@@ -153,13 +154,16 @@ export function Navigation() {
           <span className="nav-underline" ref={underlineRef} aria-hidden="true" />
         </ul>
 
-        <button className="nav-cta" onClick={() => go('contact')} data-intro="nav-cta">
+        <div className="nav-actions">
+          <ThemeToggle />
+          <button className="nav-cta" onClick={() => go('contact')} data-intro="nav-cta">
           <span>Enquire</span>
           <span className="arrow-cycle arrow-cycle--diag" aria-hidden="true">
             <span>↗</span>
             <span>↗</span>
           </span>
         </button>
+        </div>
 
         <button
           className={`nav-menu-btn${menuOpen ? ' is-open' : ''}`}

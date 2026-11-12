@@ -7,14 +7,14 @@
   align-items: center;
   justify-content: center;
   gap: 2.2vh;
-  background-color: rgb(3, 3, 4);
+  background-color: rgb(var(--bg-rgb));
   pointer-events: none;
 }
 .preloader-mark {
   font-family: var(--font-jp);
   font-weight: 300;
   font-size: clamp(28px, 3vw, 44px);
-  color: rgba(234, 231, 226, 0.2);
+  color: rgba(var(--fg-rgb), 0.2);
   line-height: 1;
 }
 .preloader-count {
@@ -22,6 +22,6 @@
   font-size: 11px;
   letter-spacing: 0.5em;
   padding-left: 0.5em;
-  color: rgba(234, 231, 226, 0.45);
+  color: rgba(var(--fg-rgb), 0.45);
   font-variant-numeric: tabular-nums;
 }

@@ -52,7 +52,7 @@ img, svg, video { display: block; }
 /* ── Scrollbar ── */
 ::-webkit-scrollbar { width: 6px; }
 ::-webkit-scrollbar-track { background: var(--void); }
-::-webkit-scrollbar-thumb { background: #2a2729; border-radius: 3px; }
+::-webkit-scrollbar-thumb { background: var(--scrollbar); border-radius: 3px; }
 
 /* ── Shared typography ── */
 .eyebrow {
@@ -108,10 +108,10 @@ img, svg, video { display: block; }
   pointer-events: none; overflow: visible;
 }
 .btn-line-border rect { width: calc(100% - 1px); height: calc(100% - 1px); fill: none; stroke: var(--hairline-strong); stroke-width: 1; vector-effect: non-scaling-stroke; transition: stroke var(--dur-micro); }
-.btn-line:hover .btn-line-border rect { stroke: rgba(234, 231, 226, 0.85); }
+.btn-line:hover .btn-line-border rect { stroke: rgba(var(--fg-rgb), 0.85); }
 .btn-line-wash {
   position: absolute; inset: 0; z-index: -1;
-  background: linear-gradient(90deg, rgba(110, 16, 16, 0.78), rgba(80, 12, 14, 0.6));
+  background: linear-gradient(90deg, var(--wash-a), var(--wash-b));
   transform: scaleX(0); transform-origin: left center;
   transition: transform 0.55s var(--ease-out-expo);
 }
@@ -159,7 +159,7 @@ img, svg, video { display: block; }
 /* Soft corner vignette in the HTML layer (cheap, matches the reference framing) */
 .vignette {
   position: fixed; inset: 0; z-index: 1; pointer-events: none;
-  background: radial-gradient(ellipse 85% 80% at 50% 45%, transparent 55%, rgba(0, 0, 0, 0.55) 100%);
+  background: radial-gradient(ellipse 85% 80% at 50% 45%, transparent 55%, var(--vignette) 100%);
 }
 
 /* No-WebGL fallback */
@@ -188,9 +188,9 @@ img, svg, video { display: block; }
 
 /* ── Blade-slash wipe ── */
 .slash { position: fixed; inset: 0; z-index: 90; pointer-events: none; visibility: hidden; }
-.slash-panel { position: absolute; inset: 0; background: #030304; will-change: transform; }
-.slash-panel--a { background: linear-gradient(120deg, #040405, #0a0709); }
-.slash-panel--b { background: linear-gradient(300deg, #040405, #0b0608); }
+.slash-panel { position: absolute; inset: 0; background: var(--void); will-change: transform; }
+.slash-panel--a { background: linear-gradient(120deg, var(--void), var(--night)); }
+.slash-panel--b { background: linear-gradient(300deg, var(--void), var(--night)); }
 .slash-line {
   position: absolute;
   left: 0;
@@ -207,7 +207,7 @@ img, svg, video { display: block; }
 /* ── Phones ── */
 @media (max-width: 767px) {
   /* copy sits over the live scene: a soft shadow keeps it readable over fog and the moon's reflection */
-  .section p, .contact-description, .craft-row-desc { text-shadow: 0 1px 14px rgba(0, 0, 0, 0.85), 0 0 2px rgba(0, 0, 0, 0.6); }
+  .section p, .contact-description, .craft-row-desc { text-shadow: 0 1px 14px rgba(var(--bg-rgb), 0.85), 0 0 2px rgba(var(--bg-rgb), 0.6); }
   .section { padding-left: 6vw; padding-right: 6vw; }
 }
 

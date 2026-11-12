@@ -42,18 +42,6 @@ export function Hero() {
         </span>
         <span className="hero-vkanji-line" data-intro="vline" />
       </div>
-
-      {/* scroll indicator */}
-      <button className="hero-scroll" onClick={() => slashTo('craft')} aria-label="Scroll to discover" data-intro="scroll">
-        <span className="hero-scroll-mouse">
-          <span className="hero-scroll-dot" />
-        </span>
-        <span className="hero-scroll-label">Scroll to Discover</span>
-        <span className="hero-scroll-chevrons" aria-hidden="true">
-          <svg viewBox="0 0 12 6"><path d="M1 1l5 4 5-4" /></svg>
-          <svg viewBox="0 0 12 6"><path d="M1 1l5 4 5-4" /></svg>
-        </span>
-      </button>
     </div>
   )
 }

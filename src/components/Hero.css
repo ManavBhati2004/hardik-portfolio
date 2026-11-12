@@ -29,7 +29,7 @@
   font-weight: 300;
   font-size: 19.5vh;
   line-height: 1;
-  color: rgba(150, 22, 22, 0.42);
+  color: var(--kanji-faded);
   filter: blur(1.2px);
   white-space: nowrap;
 }
@@ -132,70 +132,8 @@
   top: 62.5%; /* 36.5% of the viewport */
   width: 1px;
   height: 37.5%; /* to 44% */
-  background: rgba(234, 231, 226, 0.5);
+  background: rgba(var(--fg-rgb), 0.5);
   transform-origin: top center;
-}
-
-/* scroll indicator: centred, mouse 84–87%, label 90%, chevrons 93.5% */
-.hero-scroll {
-  position: absolute;
-  left: 50%;
-  top: 83.6%;
-  translate: -50% 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 1vh;
-  color: var(--bone-muted);
-  min-width: 44px;
-}
-.hero-scroll-mouse {
-  position: relative;
-  width: 1.15vw;
-  min-width: 15px;
-  max-width: 20px;
-  height: 3.5vh;
-  min-height: 24px;
-  border: 1px solid rgba(234, 231, 226, 0.55);
-  border-radius: 999px;
-}
-.hero-scroll-dot {
-  position: absolute;
-  left: 50%;
-  top: 22%;
-  width: 2px;
-  height: 5px;
-  margin-left: -1px;
-  border-radius: 2px;
-  background: var(--bone);
-  animation: wheel 2.4s var(--ease-in-out) infinite;
-}
-.hero-scroll-label {
-  font-family: var(--font-body);
-  font-size: clamp(12px, 0.85vw, 14px);
-  letter-spacing: 0.02em;
-}
-.hero-scroll-chevrons { display: flex; flex-direction: column; align-items: center; margin-top: -0.2vh; }
-.hero-scroll-chevrons svg {
-  width: 10px;
-  height: 5px;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 1.1;
-  margin-top: -1px;
-  animation: chev 2.4s ease-in-out infinite;
-}
-.hero-scroll-chevrons svg + svg { animation-delay: 0.25s; }
-
-@keyframes wheel {
-  0% { transform: translateY(0); opacity: 0; }
-  20% { opacity: 1; }
-  70% { transform: translateY(9px); opacity: 0; }
-  100% { transform: translateY(9px); opacity: 0; }
-}
-@keyframes chev {
-  0%, 100% { opacity: 0.25; }
-  40% { opacity: 1; }
 }
 
 /* ── tablet: title can wrap is still prevented; tighten ── */
@@ -223,5 +161,4 @@
   .hero-cta { left: 7vw; top: 79%; }
   .hero-vkanji { left: auto; right: 8vw; top: 19%; height: 15%; }
   .hero-vkanji-text { font-size: 15px; }
-  .hero-scroll { display: none; }
 }
