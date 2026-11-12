@@ -53,21 +53,32 @@ const skyFrag = /* glsl */ `
     // slowly rotating cloud veils (rotation of the lookup direction = seamless sky rotation)
     float c = cos(uAngle), s = sin(uAngle);
     vec3 rd = vec3(c * d.x - s * d.z, d.y, s * d.x + c * d.z);
-    float clouds = fbm(rd * vec3(3.0, 7.0, 3.0) + 4.0);
-    clouds = smoothstep(0.48, 0.85, clouds) * smoothstep(0.0, 0.12, h) * (1.0 - smoothstep(0.35, 0.8, h));
-    // veils catch a trace of moonlight near the moon
-    float moonward = pow(max(dot(d, uMoonDir), 0.0), 8.0);
-    col += clouds * (vec3(0.010, 0.009, 0.011) + vec3(0.025, 0.003, 0.003) * moonward);
-    // broad, very faint lunar glow in the sky
-    col += vec3(0.03, 0.004, 0.004) * pow(max(dot(d, uMoonDir), 0.0), 40.0) * 0.5;
+    // broad, soft cloud masses: near-isotropic noise with a domain warp (no long horizontal
+    // bands, which read as water lines repeated in the sky)
+    vec3 cp = rd * vec3(2.1, 3.0, 2.1);
+    float warp = fbm(cp + 4.0);
+    float clouds = fbm(cp + vec3(warp * 1.5, warp * 0.8, -warp * 1.3) + 9.0);
+    clouds = smoothstep(0.5, 0.84, clouds) * smoothstep(0.03, 0.22, h) * (1.0 - smoothstep(0.5, 0.95, h));
+    float sdm = max(dot(d, uMoonDir), 0.0);
+    // night air: a deep blue-black that lifts a little toward the horizon
+    col += vec3(0.0025, 0.0035, 0.0075) * (1.0 - t);
+    // clouds catch moonlight on the moon side, and stay near-black elsewhere
+    float moonward = pow(sdm, 5.0);
+    col += clouds * (vec3(0.006, 0.006, 0.008) + vec3(0.03, 0.005, 0.005) * moonward);
+    // atmosphere around the moon: tight glow + a wide, faint scatter
+    col += vec3(0.03, 0.004, 0.004) * pow(sdm, 40.0) * 0.5 + vec3(0.018, 0.003, 0.004) * pow(sdm, 7.0) * (1.0 - 0.6 * clouds);
+    // a faint band of star dust across the upper sky
+    float band = exp(-pow(dot(d, normalize(vec3(0.42, 0.55, -0.72))) * 4.5, 2.0));
+    col += vec3(0.006, 0.006, 0.009) * band * (0.4 + 0.6 * warp) * smoothstep(0.08, 0.45, h) * (1.0 - clouds);
 
     // day: misty ink-wash morning — off-white haze at the horizon, pale grey-blue above,
     // a soft warm sun glow where the moon sits by night, faint grey cloud veils
     if (uDay > 0.5) {
       float th = smoothstep(-0.04, 0.7, abs(h));
-      vec3 day = mix(vec3(1.0, 0.985, 0.955) * 1.55, vec3(0.955, 0.945, 0.92) * 1.42, th);
+      // a slightly deeper, cooler off-white overhead, so the white lacquer separates from the sky
+      vec3 day = mix(vec3(0.975, 0.965, 0.945) * 1.32, vec3(0.70, 0.76, 0.83) * 1.05, th);
       float sd = max(dot(d, uMoonDir), 0.0);
-      day += vec3(1.0, 0.72, 0.46) * (pow(sd, 10.0) * 0.10 + pow(sd, 70.0) * 0.26);
+      day += vec3(1.0, 0.78, 0.58) * (pow(sd, 10.0) * 0.05 + pow(sd, 70.0) * 0.14);
       day -= clouds * vec3(0.07, 0.07, 0.065);
       col = day;
     }
@@ -114,7 +125,7 @@ const starFrag = /* glsl */ `
 function Stars() {
   const groupRef = useRef<THREE.Points>(null!)
   const { geometry, uniforms } = useMemo(() => {
-    const COUNT = 150
+    const COUNT = 380
     const pos = new Float32Array(COUNT * 3)
     const size = new Float32Array(COUNT)
     const phase = new Float32Array(COUNT)
@@ -129,8 +140,9 @@ function Stars() {
       pos[i * 3] = Math.sin(az) * Math.cos(el) * r
       pos[i * 3 + 1] = Math.sin(el) * r
       pos[i * 3 + 2] = -Math.cos(az) * Math.cos(el) * r
-      const bright = rnd() > 0.9
-      size[i] = bright ? 2.4 + rnd() * 0.8 : 1.1 + rnd() * 1.0
+      // mostly faint points, some medium, a few bright ones
+      const m = rnd()
+      size[i] = m > 0.96 ? 2.6 + rnd() * 0.9 : m > 0.75 ? 1.5 + rnd() * 0.7 : 0.8 + rnd() * 0.6
       phase[i] = rnd() * Math.PI * 2
       speed[i] = 0.25 + rnd() * 0.5
     }

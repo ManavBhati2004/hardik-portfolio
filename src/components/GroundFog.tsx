@@ -124,8 +124,8 @@ const LAYERS: Layer[] = [
   // Only the far horizon banks remain as planes: they sit beyond the volumetric fog's
   // march distance and soften the far waterline. Everything nearer is the raymarched
   // volume (VolumetricFog.ts), which wraps the rocks instead of slicing through them.
-  { position: [0, WATER_Y + 1.3, -26], size: [90, 3.4], vertical: true, wind: [0.22, 0], scale: 0.09, density: 0.62, seed: 3.1 },
-  { position: [6, WATER_Y + 1.1, -16], size: [60, 2.8], vertical: true, wind: [0.3, 0], scale: 0.13, density: 0.5, seed: 7.4 },]
+  { position: [0, WATER_Y + 0.8, -26], size: [90, 2.2], vertical: true, wind: [0.22, 0], scale: 0.09, density: 0.62, seed: 3.1 },
+  { position: [6, WATER_Y + 0.7, -16], size: [60, 1.9], vertical: true, wind: [0.3, 0], scale: 0.13, density: 0.5, seed: 7.4 },]
 
 const NIGHT_FOG = new THREE.Color('#8d8a90').multiplyScalar(0.62)
 const NIGHT_LIGHT = new THREE.Color('#7a1012').multiplyScalar(0.6)

@@ -101,9 +101,10 @@ const sunFrag = /* glsl */ `
     float r = d * 3.0;                            // 1 = disc edge (moon radius)
     float core = 1.0 - smoothstep(0.985, 1.005, r);
     // lighter at the centre, deeper orange toward the limb
-    vec3 disc = mix(vec3(1.22, 0.50, 0.15), vec3(0.98, 0.30, 0.07), smoothstep(0.0, 1.0, r * r));
+    // pale apricot: present, but quieter than the blade in front of it
+    vec3 disc = mix(vec3(1.0, 0.63, 0.38), vec3(0.9, 0.47, 0.26), smoothstep(0.0, 1.0, r * r));
     float out_ = max(r - 1.0, 0.0);
-    float glow = exp(-out_ * 5.0) * 0.30 + exp(-out_ * 1.6) * 0.10;
+    float glow = exp(-out_ * 5.0) * 0.18 + exp(-out_ * 1.6) * 0.06;
     vec3 col = disc * core + vec3(1.0, 0.62, 0.34) * glow * (1.0 - core);
     float a = clamp(core + glow * (1.0 - core), 0.0, 1.0) * smoothstep(1.0, 0.7, d) * uPresence;
     gl_FragColor = vec4(col, a);

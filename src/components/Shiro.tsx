@@ -166,8 +166,9 @@ export function Shiro() {
     shared.uLightDir.value.copy(day ? DAY_DIR : MOON_DIR)
     shared.uLightCol.value.copy(day ? DAY_LIGHT : NIGHT_LIGHT)
     shared.uAmbient.value.copy(day ? DAY_AMBIENT : NIGHT_AMBIENT)
-    shared.uHaze.value = day ? 0.06 : 0.02
-    shared.uFogDensity.value = day ? 0.015 : 0.0075
+    shared.uHaze.value = day ? 0.04 : 0.02
+    // near the shrine it is clear; from the hero (twice as far) it is only a faint silhouette
+    shared.uFogDensity.value = day ? 0.034 : 0.03
     if (sceneFog && 'color' in sceneFog) shared.uFogCol.value.copy(sceneFog.color)
   })
 

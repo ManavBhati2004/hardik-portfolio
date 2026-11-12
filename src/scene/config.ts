@@ -57,10 +57,11 @@ export const TORII_XZ = new THREE.Vector2(8.45, -8.6)
 /** Centre of the gate, used to aim the shrine close-up (y set to the planted gate in Environment). */
 export const TORII_FOCUS = new THREE.Vector3(8.39, -0.45, -8.56)
 
-/** Distant castle on its wooded hill across the water, behind and right of the torii.
+/** The castle on its wooded rise directly behind the torii headland (a few units beyond the gate
+ *  along the shrine camera's view line), so gate and keep compose as one shrine precinct.
  *  Model origin = main keep axis at water level; the model's front faces +Z. */
-export const SHIRO_POSITION = new THREE.Vector3(34, WATER_Y, -31)
-export const SHIRO_SCALE = 0.15
+export const SHIRO_POSITION = new THREE.Vector3(15.4, WATER_Y + 0.25, -15.6)
+export const SHIRO_SCALE = 0.125
 export const SHIRO_YAW = -0.55
 
 /* ─── Camera journey keyframes ───

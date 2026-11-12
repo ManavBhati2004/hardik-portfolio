@@ -132,7 +132,9 @@ const fragment = /* glsl */ `
     // ground bank: thick on the water, thinning upward (and rolling with the noise)
     float ground = exp(-max(h, 0.0) / (uHeight * (0.5 + 1.0 * n))) * smoothstep(0.46, 0.8, n);
     // higher drifting wisps
-    float wisps = exp(-max(h - 0.6, 0.0) / 0.9) * smoothstep(0.58, 0.85, n) * 0.35;
+    // (near the camera only: seen edge-on from far away, a thin high layer turns into long
+    //  horizontal streaks across the lower sky, like water lines repeated above the horizon)
+    float wisps = exp(-max(h - 0.6, 0.0) / 0.9) * smoothstep(0.58, 0.85, n) * 0.3 * (1.0 - smoothstep(8.0, 20.0, dist));
     float d = (ground + wisps) * uDensity;
     // preloader: a deep bank filling the whole view, parting from the centre
     d += preload * uPreK * (0.25 + smoothstep(0.35, 0.85, n));

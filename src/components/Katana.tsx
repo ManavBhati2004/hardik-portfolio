@@ -68,7 +68,18 @@ function addBladeGradient(mat: THREE.MeshPhysicalMaterial) {
 interface KatanaParts {
   root: THREE.Object3D
   saya: THREE.Object3D | null
+  /** sits at the centre of the blade's arc; turning it slides the saya along the blade */
+  pivot: THREE.Group
+  arcRadius: number
+  arcSign: number
+  arcAxis: 'x' | 'z'
+  bladeMats: THREE.MeshPhysicalMaterial[]
 }
+
+/** How far (world units) the sheathed sword waits below its final pose before the draw. */
+const DRAW_LIFT = 0.42
+/** Seconds for the draw + the saya's return to the water. */
+const DRAW_TIME = 2.3
 
 function useKatanaModel(kind: KatanaKind): KatanaParts {
   const { scene } = useGLTF(KATANA_URLS[kind])
@@ -103,7 +114,10 @@ function useKatanaModel(kind: KatanaKind): KatanaParts {
         mat.envMapIntensity = 2.6 // gold fittings, chain
       } else {
         // lacquer and silk: a clear lacquer coat on the hard parts, soft silk on the wraps
-        mat.envMapIntensity = 1.4
+        // the white katana: less flat fill and a touch under pure white, so its form shades
+        // and it stays the cleanest bright object against the pale day sky
+        mat.envMapIntensity = kind === 'light' ? 0.7 : 1.4
+        if (kind === 'light') mat.color.multiplyScalar(0.84)
         if (mat.roughness < 0.3) {
           mat.clearcoat = 0.6
           mat.clearcoatRoughness = 0.08
@@ -111,8 +125,89 @@ function useKatanaModel(kind: KatanaKind): KatanaParts {
       }
       mesh.material = mat
     })
-    return { root, saya: root.getObjectByName('Saya') ?? null }
-  }, [scene, gl])
+    // The saya leaves along the blade's own curve: it turns about the centre of the blade's
+    // arc, so the curved blade never passes through the saya wall.
+    const saya = root.getObjectByName('Saya') ?? null
+    const pivot = new THREE.Group()
+    let arcRadius = 1e6
+    let arcSign = 1
+    let arcAxis: 'x' | 'z' = 'z'
+    if (saya) {
+      root.updateMatrixWorld(true)
+      const arc = fitBladeArc(root)
+      arcRadius = arc.radius
+      arcSign = arc.sign
+      arcAxis = arc.axis
+      pivot.position.copy(arc.center)
+      root.add(pivot)
+      pivot.updateMatrixWorld(true)
+      pivot.attach(saya)
+    }
+    const bladeMats: THREE.MeshPhysicalMaterial[] = []
+    root.traverse((c) => {
+      const m = (c as THREE.Mesh).material as THREE.MeshPhysicalMaterial | undefined
+      if ((c as THREE.Mesh).isMesh && m && m.envMapIntensity > 4) bladeMats.push(m)
+    })
+    return { root, saya, pivot, arcRadius, arcSign, arcAxis, bladeMats }
+  }, [scene, gl, kind])
+}
+
+/** Circle through the blade's centreline, in the model's root frame (blade along +Y).
+ *  Returns the arc centre, radius, the axis the saya turns about, and the turn direction
+ *  that carries a point at the guard toward the tip. */
+function fitBladeArc(root: THREE.Object3D) {
+  const BINS = 24
+  const lo = { x: new Float32Array(BINS).fill(Infinity), z: new Float32Array(BINS).fill(Infinity) }
+  const hi = { x: new Float32Array(BINS).fill(-Infinity), z: new Float32Array(BINS).fill(-Infinity) }
+  const v = new THREE.Vector3()
+  root.traverse((c) => {
+    const mesh = c as THREE.Mesh
+    if (!mesh.isMesh || !/blade/i.test(mesh.name)) return
+    const pos = mesh.geometry.getAttribute('position')
+    for (let i = 0; i < pos.count; i++) {
+      v.fromBufferAttribute(pos, i).applyMatrix4(mesh.matrixWorld)
+      const b = Math.floor(((v.y - 0.04) / (BLADE_Y - 0.06)) * BINS)
+      if (b < 0 || b >= BINS) continue
+      lo.x[b] = Math.min(lo.x[b], v.x); hi.x[b] = Math.max(hi.x[b], v.x)
+      lo.z[b] = Math.min(lo.z[b], v.z); hi.z[b] = Math.max(hi.z[b], v.z)
+    }
+  })
+  const pts = (k: 'x' | 'z') => {
+    const out: [number, number][] = []
+    for (let b = 0; b < BINS; b++) {
+      if (lo[k][b] === Infinity) continue
+      out.push([(lo[k][b] + hi[k][b]) / 2, 0.04 + ((b + 0.5) / BINS) * (BLADE_Y - 0.06)])
+    }
+    return out
+  }
+  const spread = (p: [number, number][]) => (p.length ? Math.max(...p.map((q) => q[0])) - Math.min(...p.map((q) => q[0])) : 0)
+  const px = pts('x')
+  const pz = pts('z')
+  // the blade curves in the plane where its centreline wanders most
+  const lateral: 'x' | 'z' = spread(px) >= spread(pz) ? 'x' : 'z'
+  const p = lateral === 'x' ? px : pz
+  const straight = { center: new THREE.Vector3(), radius: 1e6, sign: 1, axis: (lateral === 'x' ? 'z' : 'x') as 'x' | 'z' }
+  if (p.length < 5) return straight
+  // algebraic circle fit: a² + y² + D·a + E·y + F = 0
+  let Saa = 0, Say = 0, Syy = 0, Sa = 0, Sy = 0, Sra = 0, Sry = 0, Sr = 0
+  for (const [a, y] of p) {
+    const r = a * a + y * y
+    Saa += a * a; Say += a * y; Syy += y * y; Sa += a; Sy += y
+    Sra += r * a; Sry += r * y; Sr += r
+  }
+  const n = p.length
+  const M = new THREE.Matrix3().set(Saa, Say, Sa, Say, Syy, Sy, Sa, Sy, n)
+  if (Math.abs(M.determinant()) < 1e-12) return straight
+  const sol = new THREE.Vector3(-Sra, -Sry, -Sr).applyMatrix3(M.invert())
+  const ca = -sol.x / 2
+  const cy = -sol.y / 2
+  const radius = Math.sqrt(Math.max(0, ca * ca + cy * cy - sol.z))
+  if (!isFinite(radius) || radius < 0.5 || radius > 200) return straight
+  const center = lateral === 'x' ? new THREE.Vector3(ca, cy, 0) : new THREE.Vector3(0, cy, ca)
+  // which way round carries the guard (origin) toward +Y
+  const axis: 'x' | 'z' = lateral === 'x' ? 'z' : 'x'
+  const probe = new THREE.Vector3().sub(center).applyAxisAngle(axis === 'z' ? new THREE.Vector3(0, 0, 1) : new THREE.Vector3(1, 0, 0), 0.01).add(center)
+  return { center, radius, sign: probe.y > 0 ? 1 : -1, axis }
 }
 
 interface Pose {
@@ -255,9 +350,14 @@ export function Katana({ cursorRef }: KatanaProps) {
     s.finaleWas = finale
     if (s.rise < 1) s.rise = Math.min(1, s.rise + delta / 1.7)
     const ownUnder = 1 - easeOutExpo(s.rise)
+    // the draw: a short release (the collar freeing), then one smooth pull. While it runs the
+    // sword rises the last stretch and the saya travels the other way, back into the water.
+    const dRaw = reduced ? 1 : s.draw
+    const drawEase = dRaw < 0.1 ? 0.025 * easeOutExpo(dRaw / 0.1) : 0.025 + 0.975 * easeInOutCubic((dRaw - 0.1) / 0.9)
+    const liftUnder = (DRAW_LIFT / pose.sinkDepth) * (1 - easeInOutCubic(Math.min(1, dRaw / 0.75)))
     const under = inFinale
-      ? Math.max(1 - easeOutExpo(finale), ownUnder)
-      : Math.max(1 - easeOutExpo(sceneStore.katanaRise), easeInOutCubic(sceneStore.katanaSink), ownUnder)
+      ? Math.max(1 - easeOutExpo(finale), ownUnder, liftUnder)
+      : Math.max(1 - easeOutExpo(sceneStore.katanaRise), easeInOutCubic(sceneStore.katanaSink), ownUnder, liftUnder)
     const visible = under < 0.999
     sceneStore.swordVisible = visible
     rootRef.current.visible = visible
@@ -269,11 +369,12 @@ export function Katana({ cursorRef }: KatanaProps) {
     sinkRef.current.position.copy(pose.dir).multiplyScalar(pose.sinkDepth * under)
     sinkRef.current.position.y += bob
 
-    /* 1b. The reveal: once the sheathed sword is up, the saya slides off down the blade
-          (toward the tip, into the water), leaves with a slight tilt and sinks back in. */
-    const cueUp = s.cue === 'intro' ? sceneStore.katanaRise > 0.82 : s.cue === 'finale' ? finale > 0.85 : s.rise > 0.82
+    /* 1b. The reveal: the sheathed sword comes up and holds a little low; then the blade is
+          drawn — the sword rises the last stretch while the saya slides back down the blade's
+          own curve into the water it came from. No tilt, no fall: one continuous motion. */
+    const cueUp = s.cue === 'intro' ? sceneStore.katanaRise > 0.9 : s.cue === 'finale' ? finale > 0.9 : s.rise > 0.9
     if (reduced) s.draw = 1
-    else if (s.draw < 1 && cueUp) s.draw = Math.min(1, s.draw + delta / 1.6)
+    else if (s.draw < 1 && cueUp) s.draw = Math.min(1, s.draw + delta / DRAW_TIME)
     const model = s.kind === 'light' ? light : dark
     const other = s.kind === 'light' ? dark : light
     model.root.visible = true
@@ -281,15 +382,14 @@ export function Katana({ cursorRef }: KatanaProps) {
     const saya = model.saya
     if (saya) {
       const d = s.draw
-      // a short pull to free it, then it falls along the blade under its own weight
-      const pull = Math.min(1, d / 0.12)
-      const fall = Math.max(0, (d - 0.12) / 0.88)
-      // model units: from the guard to well below the water along the blade axis
-      const reach = (Math.max(0.3, (pose.guard.y - WATER_Y) / Math.max(0.3, Math.abs(pose.dir.y))) + 1.2) / SWORD_SCALE
-      // (the saya node keeps the file's own frame: the blade runs along its local +X)
-      saya.position.set(0.012 * easeOutExpo(pull) + reach * fall * fall, 0, 0)
-      saya.rotation.set(0, 0, 0.16 * fall * fall * fall)
+      // arc length (model units) that takes the saya mouth from the guard to under the water
+      const reach = (Math.max(0.3, (pose.guard.y - WATER_Y) / Math.max(0.3, Math.abs(pose.dir.y))) + 0.35) / SWORD_SCALE
+      const angle = model.arcSign * ((reach * drawEase) / model.arcRadius)
+      model.pivot.rotation.set(model.arcAxis === 'x' ? angle : 0, 0, model.arcAxis === 'z' ? angle : 0)
       saya.visible = d < 1
+      // a glint runs up the steel as it clears the saya
+      const glint = Math.sin(Math.PI * Math.min(1, Math.max(0, (d - 0.25) / 0.5)))
+      for (const m of model.bladeMats) m.envMapIntensity = 4.4 + 2.2 * glint
       // splash where the saya mouth goes through the surface
       saya.getWorldPosition(sayaMouthRef.current)
       const above = sayaMouthRef.current.y > WATER_Y

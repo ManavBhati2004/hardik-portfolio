@@ -125,11 +125,11 @@ const NIGHT = {
   moon: { i: 0.55, c: new THREE.Color('#a3241f') },
 }
 const DAY = {
-  fog: new THREE.Color('#efebe4'),
-  bg: new THREE.Color('#f2efe8'),
-  ambient: 0.5,
+  fog: new THREE.Color('#e2e1de'),
+  bg: new THREE.Color('#e6e4e0'),
+  ambient: 0.36,
   // warm morning key, cool sky fill, and the low orange sun as a back light (rims the blade and rocks)
-  key: { i: 2.3, c: new THREE.Color('#ffe8cc') },
+  key: { i: 2.6, c: new THREE.Color('#ffe8cc') },
   rim: { i: 0.8, c: new THREE.Color('#d6e2f0') },
   moon: { i: 1.5, c: new THREE.Color('#ffa765') },
 }
