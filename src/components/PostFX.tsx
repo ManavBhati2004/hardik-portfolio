@@ -1,6 +1,6 @@
-import { useEffect, useMemo } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
-import { useThree } from '@react-three/fiber'
+import { useFrame, useThree } from '@react-three/fiber'
 import { VolumetricFogEffect } from './VolumetricFog'
 import {
   EffectComposer,
@@ -12,7 +12,8 @@ import {
   SMAA,
   DepthOfField,
 } from '@react-three/postprocessing'
-import { BlendFunction, ToneMappingMode } from 'postprocessing'
+import { BlendFunction, ToneMappingMode, type BloomEffect, type NoiseEffect, type VignetteEffect } from 'postprocessing'
+import { sceneStore } from '../scene/store'
 
 export type QualityTier = 'high' | 'low'
 
@@ -26,7 +27,7 @@ export type QualityTier = 'high' | 'low'
    Low tier (phones, or slow desktops after the fps sample) drops the two
    expensive passes — AO and DoF — and keeps the look-defining ones.
    ───────────────────────────────────────────────────────────────────────────── */
-export function PostFX({ quality, focusTarget, day = false }: { quality: QualityTier; focusTarget: THREE.Vector3; day?: boolean }) {
+export function PostFX({ quality, focusTarget }: { quality: QualityTier; focusTarget: THREE.Vector3 }) {
   // raymarched volumetric mist (24 steps; 12 on the low tier)
   const camera = useThree((s) => s.camera) as THREE.PerspectiveCamera
   const fog = useMemo(() => new VolumetricFogEffect(camera, 24), [camera])
@@ -37,20 +38,36 @@ export function PostFX({ quality, focusTarget, day = false }: { quality: Quality
     return () => fog.dispose()
   }, [fog])
 
-  // a bright misty morning wants a much gentler corner falloff than the night scene
-  const vig = day ? { offset: 0.4, darkness: 0.28 } : { offset: 0.28, darkness: 0.62 }
-  // the bright day sky must not bloom: only the sun core and steel glints exceed this
-  const bloomT = day ? 2.6 : 1.0
-  // film grain reads as dirt on a bright frame: much lighter by day
-  const grain = day ? 0.1 : 1
+  // The effects are built once. Day / night only changes their values (no rebuild, so no
+  // shader recompile when the theme is toggled):
+  // - a bright misty morning wants a much gentler corner falloff than the night scene
+  // - the bright day sky must not bloom: only the sun core and steel glints exceed the threshold
+  // - film grain reads as dirt on a bright frame: much lighter by day
+  const bloomRef = useRef<BloomEffect>(null)
+  const vigRef = useRef<VignetteEffect>(null)
+  const noiseRef = useRef<NoiseEffect>(null)
+  const lastDay = useRef(-1)
+  useFrame(() => {
+    const day = sceneStore.day > 0.5 ? 1 : 0
+    // (the effect refs arrive a frame or two after mount: only mark as applied once they exist)
+    if (day === lastDay.current || !bloomRef.current || !vigRef.current || !noiseRef.current) return
+    lastDay.current = day
+    if (bloomRef.current) bloomRef.current.luminanceMaterial.threshold = day ? 2.6 : 1.0
+    if (vigRef.current) {
+      vigRef.current.offset = day ? 0.4 : 0.28
+      vigRef.current.darkness = day ? 0.28 : 0.62
+    }
+    if (noiseRef.current) noiseRef.current.blendMode.opacity.value = (quality === 'low' ? 0.28 : 0.32) * (day ? 0.1 : 1)
+  })
+
   if (quality === 'low') {
     return (
       <EffectComposer multisampling={0} frameBufferType={THREE.HalfFloatType}>
         <primitive object={fog} dispose={null} />
-        <Bloom mipmapBlur luminanceThreshold={bloomT} luminanceSmoothing={0.12} intensity={0.34} radius={0.65} />
+        <Bloom ref={bloomRef} mipmapBlur luminanceThreshold={1.0} luminanceSmoothing={0.12} intensity={0.34} radius={0.65} />
         <ToneMapping mode={ToneMappingMode.AGX} />
-        <Vignette offset={vig.offset} darkness={vig.darkness} />
-        <Noise premultiply opacity={0.28 * grain} blendFunction={BlendFunction.SOFT_LIGHT} />
+        <Vignette ref={vigRef} offset={0.28} darkness={0.62} />
+        <Noise ref={noiseRef} premultiply opacity={0.28} blendFunction={BlendFunction.SOFT_LIGHT} />
         <SMAA />
       </EffectComposer>
     )
@@ -70,10 +87,10 @@ export function PostFX({ quality, focusTarget, day = false }: { quality: Quality
       <primitive object={fog} dispose={null} />
       {/* gentle and at near-full resolution: rocks and shrine stay crisp, only the far distance softens */}
       <DepthOfField target={focusTarget} focalLength={0.14} bokehScale={0.7} height={900} />
-      <Bloom mipmapBlur luminanceThreshold={bloomT} luminanceSmoothing={0.12} intensity={0.38} radius={0.72} />
+      <Bloom ref={bloomRef} mipmapBlur luminanceThreshold={1.0} luminanceSmoothing={0.12} intensity={0.38} radius={0.72} />
       <ToneMapping mode={ToneMappingMode.AGX} />
-      <Vignette offset={vig.offset} darkness={vig.darkness} />
-      <Noise premultiply opacity={0.32 * grain} blendFunction={BlendFunction.SOFT_LIGHT} />
+      <Vignette ref={vigRef} offset={0.28} darkness={0.62} />
+      <Noise ref={noiseRef} premultiply opacity={0.32} blendFunction={BlendFunction.SOFT_LIGHT} />
       <SMAA />
     </EffectComposer>
   )

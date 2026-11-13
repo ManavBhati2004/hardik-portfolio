@@ -61,13 +61,22 @@ function channel(rand: () => number): Float32Array {
   return out
 }
 
-export function createNoiseTexture(gl: WebGL2RenderingContext): WebGLTexture {
+let cached: Uint8Array | null = null
+/** The texture's RGBA bytes (also sampled on the CPU to trace the ink front, see inkFront.ts). */
+export function noiseData(): Uint8Array {
+  if (cached) return cached
   const rand = mulberry32(0x1b1eed) // fixed: per-click variety comes from uSeed
   const channels = [channel(rand), channel(rand), channel(rand), channel(rand)]
   const data = new Uint8Array(NOISE_SIZE * NOISE_SIZE * 4)
   for (let i = 0; i < NOISE_SIZE * NOISE_SIZE; i++) {
     for (let c = 0; c < 4; c++) data[i * 4 + c] = Math.round((channels[c][i] * 0.5 + 0.5) * 255)
   }
+  cached = data
+  return data
+}
+
+export function createNoiseTexture(gl: WebGL2RenderingContext): WebGLTexture {
+  const data = noiseData()
   const tex = gl.createTexture()
   if (!tex) throw new Error('createTexture failed')
   gl.bindTexture(gl.TEXTURE_2D, tex)

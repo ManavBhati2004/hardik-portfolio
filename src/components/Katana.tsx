@@ -6,6 +6,7 @@ import { onSceneEvent, sceneStore } from '../scene/store'
 import { pointAtNdc, isMobileViewport, heroCamera, pctToNdc } from '../scene/placement'
 import { CAMERA_FOV, CAMERA_PATH, HERO_LAYOUT, KATANA_DISTANCE, WATER_Y } from '../scene/config'
 import type { CursorRef } from './Scene3D'
+import { makeDissolve, makeSayaParticles, patchKatanaMaterial, type DissolveUniforms, type SayaParticles } from './katanaFx'
 
 /* ─── Props ─── */
 export interface KatanaProps {
@@ -36,34 +37,6 @@ const DOWN = new THREE.Vector3(0, -1, 0)
 /** 1 by night (crimson toward the tip), 0 by day (polished steel). Shared by every blade material. */
 const bladeTintAmount = { value: 1 }
 
-function addBladeGradient(mat: THREE.MeshPhysicalMaterial) {
-  mat.onBeforeCompile = (shader) => {
-    shader.uniforms.uBladeTint = { value: new THREE.Color(1.0, 0.12, 0.1) }
-    shader.uniforms.uBladeAmt = bladeTintAmount
-    shader.vertexShader = shader.vertexShader
-      .replace('#include <common>', '#include <common>\n varying float vBladeY;')
-      .replace('#include <begin_vertex>', '#include <begin_vertex>\n vBladeY = position.y;')
-    shader.fragmentShader = shader.fragmentShader
-      .replace('#include <common>', '#include <common>\n varying float vBladeY;\n uniform vec3 uBladeTint;\n uniform float uBladeAmt;')
-      .replace(
-        '#include <lights_fragment_end>',
-        `#include <lights_fragment_end>
-         {
-           // 0 at the upper blade → 1 at the tip (lower third reads crimson)
-           float bw = smoothstep(${(BLADE_Y * 0.36).toFixed(3)}, ${(BLADE_Y * 0.97).toFixed(3)}, vBladeY);
-           bw = pow(bw, 1.25) * uBladeAmt;
-           vec3 tint = mix(vec3(1.0), uBladeTint * 1.55, bw);
-           reflectedLight.directSpecular *= tint;
-           reflectedLight.indirectSpecular *= tint;
-           // faint crimson environment picked up from the moon and the lit water
-           float fres = pow(1.0 - saturate(dot(normal, normalize(vViewPosition))), 2.0);
-           reflectedLight.indirectSpecular += uBladeTint * bw * (0.05 + 0.1 * fres);
-         }`
-      )
-  }
-  mat.customProgramCacheKey = () => 'katana-blade-gradient'
-}
-
 /* ─── One katana model: its authored materials, tuned for the scene's lighting ─── */
 interface KatanaParts {
   root: THREE.Object3D
@@ -74,12 +47,24 @@ interface KatanaParts {
   arcSign: number
   arcAxis: 'x' | 'z'
   bladeMats: THREE.MeshPhysicalMaterial[]
+  /** dissolve of the whole katana, pommel → tip (the day/night transformation) */
+  morph: DissolveUniforms
+  /** dissolve of the saya, mouth → end, after the draw */
+  sayaDis: DissolveUniforms
+  particles: SayaParticles | null
 }
 
-/** How far (world units) the sheathed sword waits below its final pose before the draw. */
-const DRAW_LIFT = 0.42
-/** Seconds for the draw + the saya's return to the water. */
-const DRAW_TIME = 2.3
+/** Gap (world units) between the blade tip and the water when the katana hovers. */
+const HOVER_GAP = 0.55
+/** How far the sword rises out of its saya during the draw (world units). */
+const DRAW_RISE = 0.12
+/** Seconds for the draw + the saya burning away. */
+const DRAW_TIME = 2.6
+/** Seconds for the day/night transformation (one revolution). */
+const MORPH_TIME = 1.4
+/** Saya extent along its own +X (model units): mouth → end. */
+const SAYA_X0 = 0.03
+const SAYA_X1 = 0.8
 
 function useKatanaModel(kind: KatanaKind): KatanaParts {
   const { scene } = useGLTF(KATANA_URLS[kind])
@@ -87,6 +72,13 @@ function useKatanaModel(kind: KatanaKind): KatanaParts {
   return useMemo(() => {
     const root = scene.clone(true)
     const maxAniso = gl.capabilities.getMaxAnisotropy()
+    const morph = makeDissolve(new THREE.Vector3(0, 1, 0), 0.07)
+    const sayaDis = makeDissolve(new THREE.Vector3(1, 0, 0), 0.06)
+    const sayaNode = root.getObjectByName('Saya')
+    const inSaya = (o: THREE.Object3D) => {
+      for (let p: THREE.Object3D | null = o; p; p = p.parent) if (p === sayaNode) return true
+      return false
+    }
     root.traverse((child) => {
       const mesh = child as THREE.Mesh
       if (!mesh.isMesh) return
@@ -109,7 +101,6 @@ function useKatanaModel(kind: KatanaKind): KatanaParts {
         mat.envMapIntensity = 4.4
         mat.anisotropy = 0.35
         mat.anisotropyRotation = Math.PI / 2
-        addBladeGradient(mat)
       } else if (mat.metalness > 0.5) {
         mat.envMapIntensity = 2.6 // gold fittings, chain
       } else {
@@ -123,6 +114,10 @@ function useKatanaModel(kind: KatanaKind): KatanaParts {
           mat.clearcoatRoughness = 0.08
         }
       }
+      patchKatanaMaterial(mat, {
+        dissolve: inSaya(mesh) ? sayaDis : morph,
+        blade: isBlade ? { tipY: BLADE_Y, amount: bladeTintAmount } : undefined,
+      })
       mesh.material = mat
     })
     // The saya leaves along the blade's own curve: it turns about the centre of the blade's
@@ -143,12 +138,19 @@ function useKatanaModel(kind: KatanaKind): KatanaParts {
       pivot.updateMatrixWorld(true)
       pivot.attach(saya)
     }
+    // ash shed by the saya's burning edge (lives in the saya's own space)
+    let particles: SayaParticles | null = null
+    if (saya) {
+      root.updateMatrixWorld(true)
+      particles = makeSayaParticles(saya)
+      saya.add(particles.points)
+    }
     const bladeMats: THREE.MeshPhysicalMaterial[] = []
     root.traverse((c) => {
       const m = (c as THREE.Mesh).material as THREE.MeshPhysicalMaterial | undefined
       if ((c as THREE.Mesh).isMesh && m && m.envMapIntensity > 4) bladeMats.push(m)
     })
-    return { root, saya, pivot, arcRadius, arcSign, arcAxis, bladeMats }
+    return { root, saya, pivot, arcRadius, arcSign, arcAxis, bladeMats, morph, sayaDis, particles }
   }, [scene, gl, kind])
 }
 
@@ -235,6 +237,9 @@ function solvePose(cam: THREE.PerspectiveCamera, guardPct: { x: number; y: numbe
   const s = Math.abs(s1 - KATANA_DISTANCE) < Math.abs(s2 - KATANA_DISTANCE) ? s1 : s2
   const tip = o.clone().addScaledVector(d, s)
   out.dir.subVectors(tip, out.guard).normalize()
+  // hover: the katana floats in mid-air, the tip a clear gap above the water
+  const lift = Math.max(0, WATER_Y + HOVER_GAP - tip.y)
+  out.guard.y += lift
   out.quat.setFromUnitVectors(DOWN, out.dir)
   // depth along the axis needed to put the pommel under the water
   const pommelAbove = out.guard.y + HANDLE_Y * SWORD_SCALE * Math.abs(out.dir.y) - WATER_Y
@@ -255,6 +260,12 @@ function keyCamera(i: number, aspect: number) {
   return _keyCam
 }
 
+/* burning edge and ash colours: crimson embers by night, warm gold by day */
+const EDGE_NIGHT = new THREE.Color(1.0, 0.16, 0.07).multiplyScalar(3.2)
+const EDGE_DAY = new THREE.Color(1.0, 0.72, 0.4).multiplyScalar(2.2)
+const ASH_NIGHT = new THREE.Color(0.05, 0.035, 0.035)
+const ASH_DAY = new THREE.Color(0.32, 0.3, 0.31)
+
 const easeOutExpo = (t: number) => (t >= 1 ? 1 : 1 - Math.pow(2, -10 * t))
 const easeInOutCubic = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2)
 
@@ -269,7 +280,6 @@ export function Katana({ cursorRef }: KatanaProps) {
   const spinRef = useRef<THREE.Group>(null!)
   const tipRef = useRef<THREE.Object3D>(null!)
   const guardRef = useRef<THREE.Object3D>(null!)
-  const sayaMouthRef = useRef(new THREE.Vector3())
   const dark = useKatanaModel('dark')
   const light = useKatanaModel('light')
 
@@ -283,26 +293,28 @@ export function Katana({ cursorRef }: KatanaProps) {
     time: 0,
     /** which katana is out: follows the theme, swapped at the start of a reveal */
     kind: (sceneStore.day > 0.5 ? 'light' : 'dark') as KatanaKind,
-    /** own rise for reveals not driven by the intro / finale (theme toggle) 0 → 1 */
-    rise: 1,
-    /** saya slide 0 (sheathed) → 1 (gone under the water) */
+    /** the draw 0 (sheathed) → 1 (blade out, saya burnt away) */
     draw: 0,
-    /** what starts the draw: 'intro' (katanaRise), 'finale' (katanaFinale), 'own' (rise) */
-    cue: 'intro' as 'intro' | 'finale' | 'own',
-    sayaWasAbove: true,
+    /** what starts the draw: the intro rise or the finale rise */
+    cue: 'intro' as 'intro' | 'finale',
     finaleWas: 0,
+    /** day/night transformation 0 → 1 (1 = idle), and the katana it started from */
+    morph: 1,
+    morphFrom: 'dark' as KatanaKind,
   })
 
-  // theme toggle: the other theme's katana rises sheathed and is drawn again
+  // theme toggle: the hovering katana makes one revolution in mid-air while the other
+  // theme's katana replaces it, sweeping from the pommel to the tip
   useLayoutEffect(
     () =>
       onSceneEvent('theme', () => {
         const s = state.current
-        s.kind = sceneStore.day > 0.5 ? 'light' : 'dark'
-        if (sceneStore.reducedMotion) return
-        s.rise = 0
-        s.draw = 0
-        s.cue = 'own'
+        const next: KatanaKind = sceneStore.day > 0.5 ? 'light' : 'dark'
+        if (next === s.kind) return
+        s.morphFrom = s.kind
+        s.kind = next
+        s.draw = 1 // a toggle during the draw finishes it
+        s.morph = sceneStore.reducedMotion ? 1 : 0
       }),
     []
   )
@@ -345,63 +357,83 @@ export function Katana({ cursorRef }: KatanaProps) {
     if (finale > 0.001 && s.finaleWas <= 0.001 && !reduced) {
       s.draw = 0
       s.cue = 'finale'
-      s.rise = 1
     }
     s.finaleWas = finale
-    if (s.rise < 1) s.rise = Math.min(1, s.rise + delta / 1.7)
-    const ownUnder = 1 - easeOutExpo(s.rise)
-    // the draw: a short release (the collar freeing), then one smooth pull. While it runs the
-    // sword rises the last stretch and the saya travels the other way, back into the water.
-    const dRaw = reduced ? 1 : s.draw
-    const drawEase = dRaw < 0.1 ? 0.025 * easeOutExpo(dRaw / 0.1) : 0.025 + 0.975 * easeInOutCubic((dRaw - 0.1) / 0.9)
-    const liftUnder = (DRAW_LIFT / pose.sinkDepth) * (1 - easeInOutCubic(Math.min(1, dRaw / 0.75)))
+
+    // the draw: the sword rises the last stretch out of its saya (which holds still in the
+    // air), then the saya burns away from the mouth down, shedding ash
+    const cueUp = s.cue === 'intro' ? sceneStore.katanaRise > 0.9 : finale > 0.9
+    if (reduced) s.draw = 1
+    else if (s.draw < 1 && cueUp) s.draw = Math.min(1, s.draw + delta / DRAW_TIME)
+    const d = s.draw
+    const riseE = easeInOutCubic(Math.min(1, d / 0.35))
+    const liftUnder = (DRAW_RISE / pose.sinkDepth) * (1 - riseE)
     const under = inFinale
-      ? Math.max(1 - easeOutExpo(finale), ownUnder, liftUnder)
-      : Math.max(1 - easeOutExpo(sceneStore.katanaRise), easeInOutCubic(sceneStore.katanaSink), ownUnder, liftUnder)
+      ? Math.max(1 - easeOutExpo(finale), liftUnder)
+      : Math.max(1 - easeOutExpo(sceneStore.katanaRise), easeInOutCubic(sceneStore.katanaSink), liftUnder)
     const visible = under < 0.999
     sceneStore.swordVisible = visible
     rootRef.current.visible = visible
 
     rootRef.current.position.copy(pose.guard)
     orientRef.current.quaternion.copy(pose.quat)
-    const bob = reduced ? 0 : Math.sin(s.time * 0.9) * 0.025 * (1 - under)
-    // slide along the blade's own axis — tip first out of the water
+    // hover: a slow bob and a slight sway, never down to the water
+    const hover = reduced ? 0 : 1 - under
     sinkRef.current.position.copy(pose.dir).multiplyScalar(pose.sinkDepth * under)
-    sinkRef.current.position.y += bob
+    sinkRef.current.position.y += Math.sin(s.time * 0.9) * 0.03 * hover
+    sinkRef.current.rotation.set(Math.sin(s.time * 0.53) * 0.012 * hover, 0, Math.sin(s.time * 0.71 + 1.3) * 0.014 * hover)
 
-    /* 1b. The reveal: the sheathed sword comes up and holds a little low; then the blade is
-          drawn — the sword rises the last stretch while the saya slides back down the blade's
-          own curve into the water it came from. No tilt, no fall: one continuous motion. */
-    const cueUp = s.cue === 'intro' ? sceneStore.katanaRise > 0.9 : s.cue === 'finale' ? finale > 0.9 : s.rise > 0.9
-    if (reduced) s.draw = 1
-    else if (s.draw < 1 && cueUp) s.draw = Math.min(1, s.draw + delta / DRAW_TIME)
+    /* 1b. Which katana shows, the transformation between them, and the saya */
+    if (s.morph < 1) s.morph = Math.min(1, s.morph + delta / MORPH_TIME)
+    const morphing = s.morph < 1
     const model = s.kind === 'light' ? light : dark
     const other = s.kind === 'light' ? dark : light
     model.root.visible = true
-    other.root.visible = false
+    other.root.visible = morphing && s.morphFrom !== s.kind
+    const me = easeInOutCubic(s.morph)
+    // the front sweeps from the pommel (model y ≈ −0.33) past the tip (≈ 0.72)
+    const front = THREE.MathUtils.lerp(-0.42, 0.82, me)
+    const edgeCol = s.kind === 'light' ? EDGE_DAY : EDGE_NIGHT
+    for (const [m, keep] of [
+      [model, -1],
+      [other, 1],
+    ] as const) {
+      m.morph.uDisOn.value = morphing ? 1 : 0
+      m.morph.uDisFront.value = front
+      m.morph.uDisKeep.value = keep
+      m.morph.uDisEdge.value.copy(edgeCol)
+      m.morph.uDisRef.value.copy(m.root.matrixWorld).invert()
+    }
+    if (other.saya) other.saya.visible = false
+
     const saya = model.saya
     if (saya) {
-      const d = s.draw
-      // arc length (model units) that takes the saya mouth from the guard to under the water
-      const reach = (Math.max(0.3, (pose.guard.y - WATER_Y) / Math.max(0.3, Math.abs(pose.dir.y))) + 0.35) / SWORD_SCALE
-      const angle = model.arcSign * ((reach * drawEase) / model.arcRadius)
+      // the saya holds still in the air while the sword rises out of it
+      const angle = model.arcSign * ((DRAW_RISE / SWORD_SCALE) * riseE / model.arcRadius)
       model.pivot.rotation.set(model.arcAxis === 'x' ? angle : 0, 0, model.arcAxis === 'z' ? angle : 0)
-      saya.visible = d < 1
-      // a glint runs up the steel as it clears the saya
-      const glint = Math.sin(Math.PI * Math.min(1, Math.max(0, (d - 0.25) / 0.5)))
-      for (const m of model.bladeMats) m.envMapIntensity = 4.4 + 2.2 * glint
-      // splash where the saya mouth goes through the surface
-      saya.getWorldPosition(sayaMouthRef.current)
-      const above = sayaMouthRef.current.y > WATER_Y
-      if (s.sayaWasAbove && !above && d > 0 && d < 1) {
-        sceneStore.splash.x = sayaMouthRef.current.x
-        sceneStore.splash.z = sayaMouthRef.current.z
-        sceneStore.splash.strength = 0.05
+      // then it burns away from the mouth down
+      const burn = Math.max(0, (d - 0.3) / 0.7)
+      const sayaFront = THREE.MathUtils.lerp(SAYA_X0 - 0.06, SAYA_X1 + 0.35, easeInOutCubic(burn))
+      saya.visible = d < 1 && !morphing
+      model.sayaDis.uDisOn.value = burn > 0 ? 1 : 0
+      model.sayaDis.uDisFront.value = sayaFront
+      model.sayaDis.uDisKeep.value = 1
+      model.sayaDis.uDisEdge.value.copy(edgeCol)
+      model.sayaDis.uDisRef.value.copy(saya.matrixWorld).invert()
+      const pt = model.particles
+      if (pt) {
+        pt.points.visible = burn > 0 && d < 1
+        pt.uniforms.uFront.value = sayaFront
+        pt.uniforms.uTime.value = s.time
+        pt.uniforms.uColor.value.copy(s.kind === 'light' ? ASH_DAY : ASH_NIGHT)
+        pt.uniforms.uHot.value.copy(edgeCol)
       }
-      s.sayaWasAbove = above || d === 0
+      // a glint runs down the steel as it clears the saya
+      const glint = Math.sin(Math.PI * Math.min(1, Math.max(0, (d - 0.2) / 0.6)))
+      for (const m of model.bladeMats) m.envMapIntensity = 4.4 + 2.2 * glint
     }
 
-    /* 2. Scroll-driven spin around the blade axis, followed by a critically damped spring;
+    /* 2. Scroll-driven spin    /* 2. Scroll-driven spin around the blade axis, followed by a critically damped spring;
           the finale blends to the nearest calm rest angle. */
     const vh = Math.max(1, window.innerHeight)
     const scrollSpin = REST_SPIN + (sceneStore.scrollY / vh) * TURN_PER_VIEWPORT
@@ -410,7 +442,7 @@ export function Katana({ cursorRef }: KatanaProps) {
     const prev = s.spin
     s.spin = reduced ? target : THREE.MathUtils.damp(s.spin, target, SPIN_LAMBDA, delta)
     sceneStore.swordSpin = (s.spin - prev) / Math.max(delta, 1e-4)
-    spinRef.current.rotation.y = s.spin
+    spinRef.current.rotation.y = s.spin + TAU * easeInOutCubic(s.morph < 1 ? s.morph : 0)
 
     /* 3. Cursor: subtle opposite-direction tilt + drift, separate damped layer */
     const cursor = cursorRef?.current

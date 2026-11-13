@@ -10,6 +10,9 @@ import { TORII_XZ, WATER_Y } from '../scene/config'
    far-right cliff. It is planted on the actual rock surface by raycasting
    down onto the cliff.
    ─────────────────────────────────────────────────────────────────────────── */
+/** scale of the torii's baked albedo (build_torii.py bakes it ~2.9x brighter than it renders) */
+const TEX_GAIN = 0.35
+
 function ToriiShrineModel({ groundName }: { groundName: string }) {
   const { scene } = useGLTF('/models/torii.opt.glb')
   const ref = useRef<THREE.Group>(null!)
@@ -24,6 +27,18 @@ function ToriiShrineModel({ groundName }: { groundName: string }) {
       const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material]
       materials.forEach((mat) => {
         if (!(mat instanceof THREE.MeshStandardMaterial)) return
+        if (mat.map) {
+          // baked atlas (lacquer wear, wood grain, granite): its albedo is stored brighter than
+          // it renders, for 8-bit headroom; TEX_GAIN brings it back to the night-dark grade, and
+          // the roughness comes from the ORM map
+          mat.color = new THREE.Color(TEX_GAIN, TEX_GAIN, TEX_GAIN)
+          mat.roughness = 1
+          mat.metalness = 0
+          mat.envMapIntensity = 0.8
+          for (const t of [mat.map, mat.normalMap, mat.roughnessMap]) if (t) t.anisotropy = 8
+          mat.needsUpdate = true
+          return
+        }
         const name = (mat.name || '').toLowerCase()
         if (name.includes('roof')) {
           mat.color = new THREE.Color('#0b0b0d')

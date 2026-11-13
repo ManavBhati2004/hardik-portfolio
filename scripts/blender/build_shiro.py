@@ -182,7 +182,7 @@ def segs(length, cell):
 # ─────────────────────────────────────────────────────────────────────────────
 # Building parts
 # ─────────────────────────────────────────────────────────────────────────────
-def ishigaki(cx, cy, z0, z1, w, d, b, cell=0.9, K=6):
+def ishigaki(cx, cy, z0, z1, w, d, b, cell=0.6, K=9):
     """Battered stone base: flares out concavely toward the bottom (sori)."""
     P = rect_param(segs(w + 2 * b, cell), segs(d + 2 * b, cell))
     rings = []
@@ -190,7 +190,16 @@ def ishigaki(cx, cy, z0, z1, w, d, b, cell=0.9, K=6):
         t = k / K
         off = b * (1 - t) ** 2
         hx, hy = w / 2 + off, d / 2 + off
-        rings.append([Vector((cx + fx * hx, cy + fy * hy, lerp(z0, z1, t))) for fx, fy, _ in P])
+        ring = []
+        for fx, fy, _ in P:
+            p = Vector((cx + fx * hx, cy + fy * hy, lerp(z0, z1, t)))
+            if k < K:
+                # rough-dressed stones: the battered face bulges and sinks block by block
+                out = Vector((fx * (abs(fx) > 0.999), fy * (abs(fy) > 0.999), 0))
+                if out.length > 0:
+                    p += out.normalized() * 0.07 * noise.noise(p * 1.3 + Vector((3.1, 7.7, 1.9)))
+            ring.append(p)
+        rings.append(ring)
     G.loft(rings, "stone", mode=("axis", cx, cy))
     G.poly(rings[-1], "stone", mode=("up",))
 

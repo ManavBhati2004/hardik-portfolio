@@ -86,7 +86,7 @@ uv = (np.arange(RES) + 0.5) / RES
 U, V = np.meshgrid(uv, uv)
 
 # silk wrap (ito): tight diamond braid, each ribbon with fine fibres along it
-N = 56
+N = 72
 a = (U + V) * N
 b = (U - V) * N
 parity = (np.floor(a) + np.floor(b)) % 2
@@ -100,7 +100,7 @@ ito_col = ito_base[None, None, :] * (0.55 + 0.45 * ito_h[..., None])
 if DARK:  # black silk catches a faint sheen on the ribbon crowns
     ito_col += (ribbon[..., None] ** 6) * 0.035
 ito_img = to_image(f"{PREFIX}_Ito_BaseColor", ito_col)
-ito_nrm = to_image(f"{PREFIX}_Ito_Normal", normal_from_height(ito_h, 22.0), non_color=True)
+ito_nrm = to_image(f"{PREFIX}_Ito_Normal", normal_from_height(ito_h, 30.0), non_color=True)
 
 # ray skin (samegawa): packed nodules of mixed size, larger "king" nodules in a row
 same_h = np.zeros((RES, RES), dtype=np.float32)
@@ -112,15 +112,15 @@ def stamp(cx, cy, r, amp):
     yy, xx = np.mgrid[y0:y1, x0:x1]
     d = np.sqrt((xx - cx) ** 2 + (yy - cy) ** 2) / r
     same_h[y0:y1, x0:x1] = np.maximum(same_h[y0:y1, x0:x1], amp * np.sqrt(np.clip(1 - d * d, 0, 1)))
-for _ in range(5200):
-    stamp(rng.random() * RES, rng.random() * RES, 4 + rng.random() * 7, 0.6 + rng.random() * 0.4)
+for _ in range(8200):
+    stamp(rng.random() * RES, rng.random() * RES, 3 + rng.random() * 6, 0.6 + rng.random() * 0.4)
 for i in range(9):
     stamp(RES * (0.08 + i * 0.105), RES * 0.5 + rng.normal() * 6, 22 + rng.random() * 10, 1.0)
 same_base = np.array([0.075, 0.072, 0.07]) if DARK else np.array([0.88, 0.86, 0.8])
 pearl = np.array([0.04, 0.04, 0.045]) if DARK else np.array([0.06, 0.05, 0.03])
 same_col = same_base[None, None, :] * (0.62 + 0.38 * same_h[..., None]) + pearl[None, None, :] * same_h[..., None] ** 3
 same_img = to_image(f"{PREFIX}_Same_BaseColor", same_col)
-same_nrm = to_image(f"{PREFIX}_Same_Normal", normal_from_height(same_h, 9.0), non_color=True)
+same_nrm = to_image(f"{PREFIX}_Same_Normal", normal_from_height(same_h, 12.0), non_color=True)
 
 
 def set_image(mat_name, label_match, img):
@@ -192,7 +192,7 @@ out_node = next(n for n in nt.nodes if n.type == "OUTPUT_MATERIAL")
 # temporary emission graph: the hamon line wanders along the blade
 a_node = nt.nodes.new("ShaderNodeAttribute"); a_node.attribute_name = "BladeCoord"
 sep = nt.nodes.new("ShaderNodeSeparateColor"); nt.links.new(a_node.outputs["Color"], sep.inputs[0])
-noise = nt.nodes.new("ShaderNodeTexNoise"); noise.inputs["Scale"].default_value = 26.0; noise.inputs["Detail"].default_value = 6.0
+noise = nt.nodes.new("ShaderNodeTexNoise"); noise.inputs["Scale"].default_value = 34.0; noise.inputs["Detail"].default_value = 9.0; noise.inputs["Roughness"].default_value = 0.62
 comb = nt.nodes.new("ShaderNodeCombineXYZ")
 nt.links.new(sep.outputs["Green"], comb.inputs["X"]); nt.links.new(sep.outputs["Red"], comb.inputs["Y"])
 nt.links.new(comb.outputs[0], noise.inputs["Vector"])
@@ -202,16 +202,16 @@ nt.links.new(noise.outputs["Fac"], math_wave.inputs[0])
 diff = nt.nodes.new("ShaderNodeMath"); diff.operation = "SUBTRACT"
 nt.links.new(sep.outputs["Red"], diff.inputs[0]); nt.links.new(math_wave.outputs[0], diff.inputs[1])
 hamon = nt.nodes.new("ShaderNodeMapRange")  # 1 on the edge side (frosty hardened steel), 0 above
-hamon.inputs["From Min"].default_value = 0.035; hamon.inputs["From Max"].default_value = -0.035
+hamon.inputs["From Min"].default_value = 0.022; hamon.inputs["From Max"].default_value = -0.022  # crisper nioi line
 nt.links.new(diff.outputs[0], hamon.inputs["Value"])
 emit = nt.nodes.new("ShaderNodeEmission")
 mix_col = nt.nodes.new("ShaderNodeMix"); mix_col.data_type = "RGBA"
-mix_col.inputs[6].default_value = (0.56, 0.57, 0.6, 1)    # polished body (ji)
-mix_col.inputs[7].default_value = (0.8, 0.81, 0.83, 1)    # hamon
+mix_col.inputs[6].default_value = (0.5, 0.515, 0.55, 1)    # polished body (ji): a touch darker, mirror-like
+mix_col.inputs[7].default_value = (0.86, 0.87, 0.88, 1)    # hamon: frosty white
 nt.links.new(hamon.outputs[0], mix_col.inputs[0])
 mix_orm = nt.nodes.new("ShaderNodeMix"); mix_orm.data_type = "RGBA"
-mix_orm.inputs[6].default_value = (1.0, 0.09, 1.0, 1)     # R occlusion, G roughness, B metal
-mix_orm.inputs[7].default_value = (1.0, 0.24, 1.0, 1)
+mix_orm.inputs[6].default_value = (1.0, 0.055, 1.0, 1)     # R occlusion, G roughness, B metal
+mix_orm.inputs[7].default_value = (1.0, 0.3, 1.0, 1)
 nt.links.new(hamon.outputs[0], mix_orm.inputs[0])
 old_surface = out_node.inputs["Surface"].links[0].from_socket
 

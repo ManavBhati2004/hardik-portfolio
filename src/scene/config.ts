@@ -91,6 +91,12 @@ export const CAMERA_PATH: CameraKey[] = [
   { t: 4, pos: new THREE.Vector3(0.15, -1.05, 8.6), target: new THREE.Vector3(0.1, -0.35, 0) },
 ]
 
+/** Portrait screens see only ~19° across: re-aim the shrine key (index 2, t 1) a few degrees
+ *  right, between the gate and the castle behind it, so both stay in frame on phones. */
+export const CAMERA_PORTRAIT_TARGETS: Record<number, THREE.Vector3> = {
+  2: new THREE.Vector3(8.95, -0.38, -8.6),
+}
+
 /** cameraT (0..4) → curve parameter u (0..1) so the camera hits each key exactly at its `t`. */
 export function cameraTToU(t: number): number {
   const n = CAMERA_PATH.length

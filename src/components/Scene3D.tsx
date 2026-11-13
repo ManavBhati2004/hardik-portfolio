@@ -15,7 +15,7 @@ import { HorizonEffect } from './HorizonEffect'
 import { SceneEnvironment } from './SceneEnvironment'
 import { FogVeil } from './FogVeil'
 import { PostFX, type QualityTier } from './PostFX'
-import { CAMERA_FOV, CAMERA_PATH, CAMERA_POSITION, LAYER_NO_REFLECT, MOON_POSITION, cameraTToU } from '../scene/config'
+import { CAMERA_FOV, CAMERA_PATH, CAMERA_PORTRAIT_TARGETS, CAMERA_POSITION, LAYER_NO_REFLECT, MOON_POSITION, cameraTToU } from '../scene/config'
 import { emitSceneEvent, onSceneEvent, sceneStore } from '../scene/store'
 import { isMobileViewport } from '../scene/placement'
 
@@ -33,12 +33,18 @@ export interface Scene3DProps {
 /* ─── Camera journey: damped travel along a Catmull-Rom path through the section keys ─── */
 function CameraRig() {
   const camera = useThree((s) => s.camera)
+  // portrait (phones): a few keys aim differently so their subject fits the narrow frame
+  const portrait = useThree((s) => s.size.width < s.size.height * 0.8)
   const curves = useMemo(
     () => ({
       pos: new THREE.CatmullRomCurve3(CAMERA_PATH.map((k) => k.pos), false, 'centripetal'),
-      target: new THREE.CatmullRomCurve3(CAMERA_PATH.map((k) => k.target), false, 'centripetal'),
+      target: new THREE.CatmullRomCurve3(
+        CAMERA_PATH.map((k, i) => (portrait && CAMERA_PORTRAIT_TARGETS[i]) || k.target),
+        false,
+        'centripetal'
+      ),
     }),
-    []
+    [portrait]
   )
   const s = useRef({ t: 0, pos: new THREE.Vector3(), target: new THREE.Vector3() })
 
@@ -73,12 +79,22 @@ function WarmUp() {
   useEffect(() => {
     let cancelled = false
     const run = async () => {
+      // compile everything, including what is hidden right now (the other theme's katana and
+      // its saya), so toggling the theme never stalls on a first-time shader compile
+      const hidden: THREE.Object3D[] = []
+      scene.traverse((o) => {
+        if (!o.visible) {
+          hidden.push(o)
+          o.visible = true
+        }
+      })
       try {
         if ('compileAsync' in gl) await gl.compileAsync(scene, camera)
         else (gl as THREE.WebGLRenderer).compile(scene, camera)
       } catch {
         /* compile is an optimisation only */
       }
+      for (const o of hidden) o.visible = false
       // two frames so textures upload before the reveal
       requestAnimationFrame(() =>
         requestAnimationFrame(() => {
@@ -158,8 +174,6 @@ function DayNightRig({ lights }: { lights: React.RefObject<{ amb: THREE.AmbientL
 
 /* ─── Inner scene contents (must be inside Canvas) ─── */
 function SceneContents({ cursorRef, quality }: { cursorRef: CursorRef; quality: QualityTier }) {
-  const [day, setDay] = useState(sceneStore.day > 0.5)
-  useEffect(() => onSceneEvent('theme', () => setDay(sceneStore.day > 0.5)), [])
   const lights = useRef<{ amb: THREE.AmbientLight | null; key: THREE.DirectionalLight | null; rim: THREE.DirectionalLight | null; moon: THREE.DirectionalLight | null }>({ amb: null, key: null, rim: null, moon: null })
   return (
     <>
@@ -223,7 +237,7 @@ function SceneContents({ cursorRef, quality }: { cursorRef: CursorRef; quality: 
         <WarmUp />
       </Suspense>
 
-      <PostFX quality={quality} focusTarget={sceneStore.swordCenter} day={day} />
+      <PostFX quality={quality} focusTarget={sceneStore.swordCenter} />
     </>
   )
 }

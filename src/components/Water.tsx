@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef } from 'react'
 import { useFrame, useThree } from '@react-three/fiber'
+import { useTexture } from '@react-three/drei'
 import * as THREE from 'three'
 import { HORIZON_COLOR, LAYER_DEFAULT, MOON_POSITION, WATER_Y } from '../scene/config'
 import { sceneStore, ambientMotion } from '../scene/store'
@@ -125,6 +126,28 @@ const waterFrag = /* glsl */ `
     return a2 / (3.14159265 * d * d);
   }
 
+  // ── Blender-baked FFT ocean (scripts/blender/bake_ocean.py): RG = normal xy, B = foam.
+  // Two snapshots per scale, each scrolling along the wind; they crossfade on a slow cycle
+  // (renormalised so the mix never flattens), so the loop is seamless.
+  uniform sampler2D uSwellA;
+  uniform sampler2D uSwellB;
+  uniform sampler2D uChopA;
+  uniform sampler2D uChopB;
+
+  // returns xy = surface slope (gradient), z = foam
+  vec3 oceanLayer(sampler2D ta, sampler2D tb, vec2 p, float tile, vec2 flowA, vec2 flowB, float period, float t) {
+    float ph = t / period;
+    float wa = 0.5 + 0.5 * cos(6.2831853 * ph);
+    float wb = 1.0 - wa;
+    vec3 a = texture2D(ta, p / tile + flowA * t).rgb;
+    vec3 b = texture2D(tb, (p + vec2(3.7, 1.9)) / tile + flowB * t).rgb;
+    vec2 na = a.rg * 2.0 - 1.0;
+    vec2 nb = b.rg * 2.0 - 1.0;
+    vec2 n = (na * wa + nb * wb) / max(sqrt(wa * wa + wb * wb), 1e-3);
+    float nz = sqrt(max(1.0 - dot(n, n), 0.04));
+    return vec3(n / nz, a.b * wa + b.b * wb);
+  }
+
   void main() {
     vec3 V = normalize(cameraPosition - vWorld);
     float dist = length(cameraPosition - vWorld);
@@ -134,7 +157,18 @@ const waterFrag = /* glsl */ `
     // the fine wind ripples fade out with distance well before they would alias into
     // moiré bands at grazing angles near the horizon
     float near = 1.0 - smoothstep(6.0, 22.0, dist);
-    vec2 grad = (waveGrad(vWorld.xz, uTime) * mix(1.0, 1.45, near) + windGrad(vWorld.xz, uTime) * near) * lod * uMotion;
+    float mid = 1.0 - smoothstep(8.0, 34.0, dist);
+
+    // gusts: patches of the lake ruffle while others stay glassy
+    float gust = smoothstep(0.3, 0.75, vn(vWorld.xz * 0.16 + vec2(uTime * 0.045, -uTime * 0.03)));
+
+    // baked swell (long wind waves, ~13 units per tile) + chop (short, ~2.3 units per tile)
+    vec3 swell = oceanLayer(uSwellA, uSwellB, vWorld.xz, 13.0, vec2(0.0042, 0.0016), vec2(0.0036, -0.0011), 19.0, uTime);
+    vec3 chop  = oceanLayer(uChopA, uChopB, vWorld.xz.yx * vec2(1.0, -1.0), 2.3, vec2(0.021, 0.008), vec2(-0.012, 0.019), 7.0, uTime);
+    vec2 baked = swell.xy * 0.12 * mid + chop.xy * 0.075 * near * (0.35 + 0.9 * gust);
+    float foam = (swell.z * mid + chop.z * near * 0.6) * lod;
+
+    vec2 grad = (waveGrad(vWorld.xz, uTime) * 0.45 + windGrad(vWorld.xz, uTime) * near * 0.4 + baked) * lod * uMotion;
 
     // interactive ripples from the height-field simulation
     vec2 ruv = (vWorld.xz - uRippleMin) / uRippleSize;
@@ -150,7 +184,8 @@ const waterFrag = /* glsl */ `
     // ── reflection: projective lookup into the mirrored render, bent by the surface normal
     vec4 rc = uTextureMatrix * vec4(vWorld, 1.0);
     vec2 suv = rc.xy / rc.w;
-    vec2 distort = N.xz * (0.075 + 0.025 * smoothstep(4.0, 20.0, dist));
+    // anisotropic: real reflections stretch into vertical streaks, they barely shift sideways
+    vec2 distort = N.xz * vec2(0.045, 0.08) * (1.0 + 0.33 * smoothstep(4.0, 20.0, dist));
     suv += distort;
     // slight roughness blur (4 taps) — calm water, not a perfect mirror
     vec2 bl = vec2(0.0012, 0.0024) * (1.0 + dist * 0.04);
@@ -160,22 +195,38 @@ const waterFrag = /* glsl */ `
       texture2D(uReflection, suv + vec2( bl.x, -bl.y)).rgb +
       texture2D(uReflection, suv + vec2(-bl.x, -bl.y)).rgb) * 0.25;
 
-    // ── Fresnel (water F0 ≈ 0.02)
+    // ── Fresnel (Schlick, water F0 ≈ 0.02) with a roughness floor: wind-roughened water
+    // never goes fully transparent at steep angles, and caps short of a perfect mirror
     float NdotV = clamp(dot(N, V), 0.0, 1.0);
     float F = 0.02 + 0.98 * pow(1.0 - NdotV, 5.0);
-    float reflAmt = clamp(F * 1.35 + 0.18, 0.0, 0.92);
+    float reflAmt = clamp(F * 1.3 + mix(0.2, 0.14, uDay), 0.0, mix(0.93, 0.9, uDay));
 
-    // day: a light blue lake under an off-white sky (the mirrored sky is tinted toward blue)
-    vec3 body = mix(vec3(0.0035, 0.0032, 0.0040), vec3(0.30, 0.45, 0.60), uDay);
+    // depth colour: looking down you see into the water (deeper tone), at grazing angles
+    // the surface tone takes over. Night is near-black with the faintest cold depth;
+    // day is a light blue lake under an off-white sky (mirrored sky tinted toward blue).
+    float down = smoothstep(0.08, 0.6, NdotV);
+    vec3 bodyNight = mix(vec3(0.0045, 0.0040, 0.0050), vec3(0.0022, 0.0030, 0.0042), down);
+    vec3 bodyDay = mix(vec3(0.38, 0.52, 0.64), vec3(0.20, 0.38, 0.54), down);
+    // swell crests thin out and glow a little lighter (sub-surface scatter, day only)
+    bodyDay += vec3(0.05, 0.09, 0.08) * clamp(dot(swell.xy, vec2(0.6, -0.4)) * 2.0 + 0.3, 0.0, 1.0) * mid;
+    vec3 body = mix(bodyNight, bodyDay, uDay);
     refl *= mix(vec3(1.0), vec3(0.74, 0.85, 0.96), uDay);
     vec3 col = mix(body, refl, reflAmt * mix(1.0, 0.72, uDay));
 
-    // ── GGX moon glints on the ripples (restrained crimson)
+    // ── foam / crest flecks from the baked Jacobian mask (very sparse on this calm lake)
+    col += mix(vec3(0.020, 0.010, 0.011), vec3(0.16, 0.17, 0.17), uDay) * smoothstep(0.15, 0.85, foam) * uMotion;
+
+    // ── GGX moon / sun glints on the waves
     vec3 Lm = normalize(uMoonPos - vWorld);
     vec3 Hm = normalize(Lm + V);
-    float spec = D_GGX(clamp(dot(N, Hm), 0.0, 1.0), 0.12) * F;
-    // night: restrained crimson glints from the moon; day: warm-white sparkle from the sun
-    col += mix(vec3(0.55, 0.06, 0.05) * 0.2, vec3(1.0, 0.66, 0.42) * 0.55, uDay) * spec;
+    float NdotHm = clamp(dot(N, Hm), 0.0, 1.0);
+    float spec = D_GGX(NdotHm, 0.10) * F;
+    // broad lobe = the glittering path under the light, sharp lobe = individual glints
+    float path = D_GGX(NdotHm, 0.32) * F;
+    // night: crimson glints from the moon (restrained); day: a warm apricot glow under the
+    // sun with a few warm-white sparkles
+    col += mix(vec3(0.62, 0.07, 0.05) * 0.26, vec3(1.0, 0.72, 0.48) * 0.5, uDay) * spec;
+    col += mix(vec3(0.30, 0.03, 0.025) * 0.10, vec3(1.0, 0.70, 0.46) * 0.22, uDay) * path * mid;
 
     // cool key-light sparkle on near ripples
     vec3 Hk = normalize(uKeyDir + V);
@@ -198,12 +249,32 @@ const waterFrag = /* glsl */ `
 
 const DAY_HORIZON = new THREE.Color(0.95, 0.94, 0.92).multiplyScalar(1.25)
 
+/** Blender-baked ocean detail (scripts/blender/bake_ocean.py). */
+const OCEAN_MAPS = [
+  '/textures/ocean_swell_a.webp',
+  '/textures/ocean_swell_b.webp',
+  '/textures/ocean_chop_a.webp',
+  '/textures/ocean_chop_b.webp',
+]
+
 export function Water({ cursorRef }: WaterProps) {
   const gl = useThree((s) => s.gl)
   const scene = useThree((s) => s.scene)
   const camera = useThree((s) => s.camera)
   const size = useThree((s) => s.size)
   const meshRef = useRef<THREE.Mesh>(null!)
+
+  // tiling data maps: repeat-wrapped, linear (no colour transform), anisotropic so the
+  // swell keeps its shape at grazing angles instead of smearing into moiré
+  const oceanMaps = useTexture(OCEAN_MAPS, (maps) => {
+    const aniso = Math.min(8, gl.capabilities.getMaxAnisotropy())
+    for (const t of maps) {
+      t.wrapS = t.wrapT = THREE.RepeatWrapping
+      t.colorSpace = THREE.NoColorSpace
+      t.anisotropy = aniso
+      t.needsUpdate = true
+    }
+  })
 
   /* ── reflection target + mirrored camera ── */
   const reflection = useMemo(() => {
@@ -289,8 +360,12 @@ export function Water({ cursorRef }: WaterProps) {
       uHorizon: { value: HORIZON_COLOR.clone() },
       uMotion: { value: 1 },
       uDay: { value: 0 },
+      uSwellA: { value: oceanMaps[0] },
+      uSwellB: { value: oceanMaps[1] },
+      uChopA: { value: oceanMaps[2] },
+      uChopB: { value: oceanMaps[3] },
     }),
-    [reflection, sim]
+    [reflection, sim, oceanMaps]
   )
 
   const geometry = useMemo(() => {
@@ -473,5 +548,7 @@ export function Water({ cursorRef }: WaterProps) {
     </mesh>
   )
 }
+
+useTexture.preload(OCEAN_MAPS)
 
 export default Water

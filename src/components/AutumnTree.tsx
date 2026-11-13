@@ -184,7 +184,6 @@ function buildBlossomInstances(bark: THREE.BufferGeometry, count: number, seed: 
   const matrices: THREE.Matrix4[] = []
   const colors: THREE.Color[] = []
   const windData = new Float32Array(count * 4)
-  const p = new THREE.Vector3()
   const n = new THREE.Vector3()
   const q = new THREE.Quaternion()
   const Z = new THREE.Vector3(0, 0, 1)
@@ -192,32 +191,64 @@ function buildBlossomInstances(bark: THREE.BufferGeometry, count: number, seed: 
   const blush = new THREE.Color(1.0, 0.8, 0.85)
   const white = new THREE.Color(1.0, 0.96, 0.97)
   const deep = new THREE.Color(0.92, 0.52, 0.62)
-  for (let k = 0; k < count; k++) {
+  const t1 = new THREE.Vector3()
+  const t2 = new THREE.Vector3()
+  const c = new THREE.Vector3()
+  const fp = new THREE.Vector3()
+  const fo = new THREE.Vector3()
+  // cherries flower in umbels: each twig anchor carries a cluster of 2–5 flowers on short
+  // stalks, fanned around the anchor and stacked in depth (inner ones lower and more upright),
+  // with the odd bud tucked in — fuller, layered clusters instead of single scattered flowers
+  let k = 0
+  while (k < count) {
     const i = pick()
-    p.fromBufferAttribute(pos, i)
+    c.fromBufferAttribute(pos, i)
     if (nor) n.fromBufferAttribute(nor, i).normalize()
     else n.set(rnd() - 0.5, rnd() - 0.5, 1).normalize()
-    // face outward from the twig, biased toward the viewer (+z) with some randomness
+    // cluster axis: outward from the twig, biased toward the viewer (+z)
     out.copy(n).multiplyScalar(0.7).add(new THREE.Vector3(rnd() - 0.5, rnd() - 0.3, 0.9)).normalize()
-    q.setFromUnitVectors(Z, out)
-    q.multiply(new THREE.Quaternion().setFromAxisAngle(Z, rnd() * Math.PI * 2))
-    const bud = rnd() < 0.22
-    const size = bud ? 0.035 + rnd() * 0.02 : 0.07 + rnd() * 0.06
-    p.addScaledVector(n, size * 0.25)
-    const m = new THREE.Matrix4().compose(p.clone(), q.clone(), new THREE.Vector3(size, size, bud ? size * 1.6 : size))
-    matrices.push(m)
-    const r = rnd()
-    colors.push(bud ? deep.clone() : r < 0.18 ? deep.clone().lerp(blush, 0.4) : r < 0.6 ? blush.clone() : white.clone())
-    windData[k * 4] = wind.getX(i)
-    windData[k * 4 + 1] = wind.getY(i)
-    windData[k * 4 + 2] = rnd()
-    windData[k * 4 + 3] = 1
+    t1.set(0, 1, 0).cross(out)
+    if (t1.lengthSq() < 1e-4) t1.set(1, 0, 0)
+    t1.normalize()
+    t2.crossVectors(out, t1)
+    const members = Math.min(count - k, 2 + Math.floor(rnd() * 4))
+    const spread = 0.05 + rnd() * 0.04
+    const phase0 = rnd() * Math.PI * 2
+    for (let j = 0; j < members; j++) {
+      const bud = rnd() < (j === 0 ? 0.08 : 0.24)
+      const size = bud ? 0.03 + rnd() * 0.02 : 0.065 + rnd() * 0.055
+      // fan position around the anchor; the first flower sits on the axis, at the front
+      const a = phase0 + (j / members) * Math.PI * 2 + (rnd() - 0.5) * 0.8
+      const rad = j === 0 ? spread * 0.2 : spread * (0.6 + rnd() * 0.5)
+      const depth = j === 0 ? 0.045 : 0.012 + rnd() * 0.03
+      fp.copy(c)
+        .addScaledVector(t1, Math.cos(a) * rad)
+        .addScaledVector(t2, Math.sin(a) * rad)
+        .addScaledVector(out, depth + size * 0.2)
+      // each flower nods outward from the cluster centre
+      fo.copy(out)
+        .addScaledVector(t1, Math.cos(a) * (0.35 + rnd() * 0.45))
+        .addScaledVector(t2, Math.sin(a) * (0.35 + rnd() * 0.45))
+        .add(new THREE.Vector3(rnd() - 0.5, rnd() - 0.5, rnd() - 0.5).multiplyScalar(0.35))
+        .normalize()
+      q.setFromUnitVectors(Z, fo)
+      q.multiply(new THREE.Quaternion().setFromAxisAngle(Z, rnd() * Math.PI * 2))
+      matrices.push(new THREE.Matrix4().compose(fp.clone(), q.clone(), new THREE.Vector3(size, size, bud ? size * 1.6 : size)))
+      // flowers on one cluster share a tint family; the centre ones open paler
+      const r = rnd()
+      colors.push(bud ? deep.clone() : r < 0.16 ? deep.clone().lerp(blush, 0.45) : r < (j === 0 ? 0.4 : 0.62) ? blush.clone() : white.clone())
+      windData[k * 4] = wind.getX(i)
+      windData[k * 4 + 1] = wind.getY(i)
+      windData[k * 4 + 2] = rnd()
+      windData[k * 4 + 3] = 1
+      k++
+    }
   }
   return { matrices, colors, windData }
 }
 
-const BLOSSOMS = 3200
-const BLOSSOMS_MOBILE = 1600
+const BLOSSOMS = 4000
+const BLOSSOMS_MOBILE = 2000
 
 export function BlossomBranch() {
   const { scene } = useGLTF('/models/sakura.glb')

@@ -5,8 +5,8 @@ Headless Blender script: builds the full cherry (sakura) tree that frames the he
 
 Then compress like the other runtime models:
   npx @gltf-transform/cli optimize <out_raw.glb> public/models/sakura.glb
-      --compress meshopt --texture-compress webp --texture-size 1024
-      --simplify false --prune-attributes false
+      --compress meshopt --texture-compress webp --texture-size 1536
+      --simplify false --prune-attributes false   (keeps the file under ~2 MB)
 
 Construction
   - A recursive branch skeleton (trunk → scaffold limbs → branches → twigs), each branch a
@@ -15,8 +15,9 @@ Construction
     (build_blossom_branch.py, same seed and growth rules), so the hero framing is unchanged:
     it starts at the origin, where it leaves the trunk. The trunk runs down (−Z) and back-left
     to the shore; the rest of the crown spreads up and to the left, outside the hero frame.
+  - Fine flowering spurs (level 4, own random stream) along the outer twigs of the whole tree.
   - Bark: a procedural cherry-bark shader (seamless 4D noise / Voronoi on a torus: vertical
-    fissured plates + horizontal lenticels) baked with Cycles into tileable albedo, roughness
+    fissured plates + horizontal lenticels + crustose lichen patches) baked with Cycles into tileable albedo, roughness
     and tangent-space normal maps, mapped with per-branch UVs (u around, v along the branch).
 
 Output (glTF, Y-up after export): a single mesh "Bark" with
@@ -39,7 +40,7 @@ OUT = os.path.abspath(argv[0])
 PREVIEW = os.path.abspath(argv[1])
 SEED = int(argv[2]) if len(argv) > 2 else 11
 BLEND_OUT = os.path.abspath(argv[3]) if len(argv) > 3 else None
-TEX_RES = 1024
+TEX_RES = 2048
 rng = random.Random(SEED)          # hero limb: identical stream to build_blossom_branch.py
 trng = random.Random(SEED * 7 + 3)  # rest of the tree
 
@@ -249,14 +250,49 @@ for frac, cdir, length, r0 in SCAFFOLDS:
         i -= 1
     grow_tree(trunk_pts[i], cdir, length, r0, 0.022, 0, trunk_d[i], trng.random(), cdir)
 
+# ───────────────────────── Fine spurs (level 4) ─────────────────────────
+# Short, thin flowering spurs along the outer twigs of the whole tree (hero limb included),
+# like the knobbly short shoots cherries flower on. They use their own random stream, so the
+# hero limb and crown above are bit-for-bit unchanged; they only add finer twigs.
+srng = random.Random(SEED * 13 + 5)
+spurs = []
+for b in branches:
+    if b["level"] < 2:
+        continue
+    pts, radii = b["points"], b["radii"]
+    n = len(pts)
+    for idx in range(max(1, int(n * 0.25)), n - 1):
+        if srng.random() > (0.42 if b["level"] == 3 else 0.22):
+            continue
+        tangent = (pts[idx + 1] - pts[idx]).normalized()
+        side = Quaternion(tangent, srng.uniform(0, 2 * math.pi)) @ perp(tangent)
+        d = (Quaternion(side, math.radians(srng.uniform(35, 75))) @ tangent).normalized()
+        d = (d + Vector((0, 0, 0.35))).normalized()  # spurs turn up a little
+        length = srng.uniform(0.05, 0.16)
+        r0 = min(radii[idx] * 0.7, 0.0032)
+        steps = 3
+        p = pts[idx].copy()
+        sp, sr, sd = [p.copy()], [r0], [b["dists"][idx]]
+        for k in range(1, steps + 1):
+            d = (d + Vector((srng.uniform(-1, 1), srng.uniform(-1, 1), srng.uniform(-1, 1))) * 0.25).normalized()
+            p = p + d * (length / steps)
+            sp.append(p.copy())
+            sr.append(r0 + (0.0011 - r0) * k / steps)
+            sd.append(sd[-1] + length / steps)
+        spurs.append(dict(points=sp, radii=sr, dists=sd, phase=b["phase"], level=4, kind=b["kind"]))
+branches.extend(spurs)
+print(f"[sakura] spurs={len(spurs)}")
+
 print(f"[sakura] branches={len(branches)} hero_max={HERO_MAX:.3f} trunk_len={TRUNK_LEN:.2f} fork={FORK_D:.2f}")
 
 # ───────────────────────── Curves → mesh ─────────────────────────
 # ring resolution per level (round bevel: 4 + 2·res vertices around)
-BEVEL_RES = {-1: 8, 0: 5, 1: 3, 2: 2, 3: 1}
+BEVEL_RES = {-1: 8, 0: 5, 1: 3, 2: 2, 3: 1, 4: 0}
 
 
 def tip_weight(b, t):
+    if b["level"] == 4:  # flowering spurs carry blossoms along most of their length
+        return min(1.0, 0.45 + t * 0.55)
     if b["level"] >= 2:
         return min(1.0, max(0.0, (t - 0.3) / 0.7)) ** 1.2
     if b["level"] == 1:
@@ -485,9 +521,19 @@ def build_proc_bark(mat):
     L.new(lmask, lent_c.inputs["Factor"])
     L.new(dark.outputs["Result"], lent_c.inputs["A"])
     lent_c.inputs["B"].default_value = (0.24, 0.18, 0.14, 1)
-    albedo = lent_c.outputs["Result"]
+    # crustose lichen: pale grey-green patches with a speckled edge
+    lich_n = noise(0.5, 0.5, 77.0, 1.0, 6, 0.62).outputs["Fac"]
+    lich = mth("MULTIPLY", smooth(mth("ADD", lich_n, mth("MULTIPLY", fine, 0.25)), 0.66, 0.74), 0.75)
+    lich_c = N.new("ShaderNodeMix")
+    lich_c.data_type = "RGBA"
+    L.new(lich, lich_c.inputs["Factor"])
+    L.new(lent_c.outputs["Result"], lich_c.inputs["A"])
+    lich_c.inputs["B"].default_value = (0.2, 0.21, 0.17, 1)
+    albedo = lich_c.outputs["Result"]
+    height = mth("ADD", height, mth("MULTIPLY", lich, 0.12))
 
     rough = mth("ADD", mth("ADD", 0.58, mth("MULTIPLY", crack, 0.32)), mth("MULTIPLY", fine, 0.12), clamp=True)
+    rough = mth("ADD", rough, mth("MULTIPLY", lich, 0.25), clamp=True)
 
     bump = N.new("ShaderNodeBump")
     bump.inputs["Strength"].default_value = 1.0

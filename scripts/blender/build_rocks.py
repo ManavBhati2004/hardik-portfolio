@@ -5,7 +5,7 @@ Headless Blender script: builds the procedural shoreline rocks.
 
 Then compress each raw GLB like the other runtime models (meshopt + webp):
   npx @gltf-transform/cli@4 optimize <raw>/<name>.glb public/models/rocks/<name>.opt.glb \
-      --compress meshopt --texture-compress webp --texture-size 1024
+      --compress meshopt --texture-compress webp --texture-size 2048
 
 Per rock:
   1. a few ellipsoid lumps, voxel-remeshed into one closed shell
@@ -48,37 +48,38 @@ ROCKS = [
     dict(name="headland_a", box=gbox((-1.853, -0.25, -2.102), (2.188, 1.079, 1.646)), seed=11,
          lumps=[((0.0, 0.0, -0.3), (0.85, 0.8, 1.0)), ((-0.45, -0.35, -0.4), (0.55, 0.6, 0.9)),
                 ((0.5, 0.45, -0.35), (0.5, 0.5, 0.8)), ((-0.35, 0.55, 0.0), (0.45, 0.4, 1.0))],
-         cuts=14, strata=1.0, detail=0.42, tris=7000, flat_top=(0.172, 0.05, 0.98, 0.62)),
+         cuts=14, strata=1.0, detail=0.42, tris=13000, tex=2048, flat_top=(0.172, 0.05, 0.98, 0.62)),
     dict(name="headland_b", box=gbox((-1.853, -0.25, -2.102), (2.188, 1.079, 1.646)), seed=23,
          lumps=[((0.1, 0.0, -0.3), (0.8, 0.75, 1.0)), ((-0.5, 0.3, -0.5), (0.5, 0.6, 0.8)),
                 ((0.45, -0.5, -0.5), (0.5, 0.45, 0.7))],
-         cuts=16, strata=0.8, detail=0.42, tris=6500),
+         cuts=16, strata=0.8, detail=0.42, tris=12000, tex=2048),
     dict(name="headland_c", box=gbox((-1.853, -0.25, -2.102), (2.188, 1.079, 1.646)), seed=37,
          lumps=[((-0.15, 0.1, -0.25), (0.7, 0.85, 1.0)), ((0.55, -0.2, -0.5), (0.45, 0.6, 0.75)),
                 ((-0.6, -0.55, -0.6), (0.4, 0.4, 0.6))],
-         cuts=18, strata=0.6, detail=0.42, tris=6500),
+         cuts=18, strata=0.6, detail=0.42, tris=12000, tex=2048),
     # low boulders / slabs for the foreground
     dict(name="boulder_a", box=gbox((-1.185, -0.059, -0.608), (1.348, 0.824, 0.626)), seed=5,
          lumps=[((0.0, 0.0, -0.35), (0.95, 0.9, 1.1)), ((-0.4, 0.2, -0.3), (0.55, 0.65, 0.9))],
-         cuts=12, strata=0.25, detail=0.32, tris=5000),
+         cuts=12, strata=0.25, detail=0.32, tris=10000, tex=2048),
     dict(name="boulder_b", box=gbox((-1.185, -0.059, -0.608), (1.348, 0.824, 0.626)), seed=71,
          lumps=[((0.05, 0.0, -0.3), (0.9, 0.95, 1.05)), ((0.5, -0.3, -0.5), (0.5, 0.55, 0.7))],
-         cuts=15, strata=0.0, detail=0.32, tris=5000),
+         cuts=15, strata=0.0, detail=0.32, tris=10000, tex=2048),
     # distant cliff wall behind the torii (mostly in fog)
     dict(name="cliff", box=gbox((-47.426, -0.644, -9.024), (39.344, 10.351, 15.214)), seed=91,
          lumps=[((-0.55, 0.0, -0.3), (0.5, 0.75, 1.1)), ((0.0, 0.1, -0.2), (0.45, 0.8, 1.15)),
                 ((0.5, -0.05, -0.35), (0.5, 0.7, 1.0)), ((-0.2, 0.45, -0.5), (0.6, 0.45, 0.8)),
                 ((0.8, 0.3, -0.6), (0.3, 0.5, 0.6)), ((-0.85, -0.3, -0.6), (0.2, 0.5, 0.6))],
-         cuts=22, strata=1.2, detail=4.5, tris=9000),
+         cuts=22, strata=1.2, detail=4.5, tris=14000),
     # distant low shoreline on the left: a spread of flat ledges
     dict(name="shoreline", box=gbox((-32.147, -1.98, -26.895), (27.349, 1.318, 15.626)), seed=53,
          lumps=[((-0.6, -0.4, -0.2), (0.35, 0.3, 1.0)), ((-0.1, -0.2, -0.1), (0.4, 0.35, 1.1)),
                 ((0.45, -0.45, -0.3), (0.35, 0.3, 0.9)), ((0.2, 0.3, -0.2), (0.4, 0.35, 1.0)),
                 ((-0.45, 0.45, -0.35), (0.35, 0.35, 0.8)), ((0.75, 0.2, -0.4), (0.25, 0.4, 0.8)),
                 ((-0.85, 0.0, -0.5), (0.18, 0.4, 0.6)), ((0.05, 0.75, -0.5), (0.4, 0.22, 0.6))],
-         cuts=18, strata=0.9, detail=3.2, tris=8000),
+         cuts=18, strata=0.9, detail=3.2, tris=12000),
 ]
-TEX = 1024
+TEX = 1024  # default bake size (the close-up rocks ask for 2048 via "tex")
+HIGH_FACES = 480000  # target face count of the sculpt the maps are baked from
 
 
 # ───────────────────────────── helpers ─────────────────────────────
@@ -103,6 +104,39 @@ def mesh_arrays(me):
     nr = np.empty(n * 3)
     me.vertices.foreach_get("normal", nr)
     return co.reshape(-1, 3), nr.reshape(-1, 3)
+
+
+def edge_pairs(me):
+    ev = np.empty(len(me.edges) * 2, dtype=np.int64)
+    me.edges.foreach_get("vertices", ev)
+    return ev.reshape(-1, 2)
+
+
+def neighbour_mean(vals, ev, n):
+    acc = np.zeros((n,) + vals.shape[1:])
+    cnt = np.zeros(n)
+    np.add.at(acc, ev[:, 0], vals[ev[:, 1]])
+    np.add.at(acc, ev[:, 1], vals[ev[:, 0]])
+    np.add.at(cnt, ev[:, 0], 1)
+    np.add.at(cnt, ev[:, 1], 1)
+    cnt = np.maximum(cnt, 1)
+    return acc / (cnt[:, None] if vals.ndim > 1 else cnt)
+
+
+def cavity(me, co, nr, radius_iters=(2, 8)):
+    """concavity at a fine and a broader scale: how far the smoothed surface sits above the
+    vertex along its normal (> 0 in cracks and hollows), normalised by the mean edge length"""
+    ev = edge_pairs(me)
+    elen = np.linalg.norm(co[ev[:, 0]] - co[ev[:, 1]], axis=1).mean()
+    out = []
+    sm = co.copy()
+    done = 0
+    for iters in radius_iters:
+        for _ in range(iters - done):
+            sm = neighbour_mean(sm, ev, len(co))
+        done = iters
+        out.append(np.einsum("ij,ij->i", nr, sm - co) / (elen * iters ** 0.5))
+    return out
 
 
 def set_co(me, co):
@@ -254,7 +288,7 @@ def build(spec):
 
     # 3. fine remesh + displacement
     area = surface_area(high.data)
-    high = remesh(high, math.sqrt(area / 220000))
+    high = remesh(high, math.sqrt(area / HIGH_FACES))
     drop_islands(high)
     co, nr = mesh_arrays(high.data)
     P = co / s
@@ -281,7 +315,23 @@ def build(spec):
         groove = (1.0 - smoothstep(0.0, 0.11, w)) * spec["strata"]
     # sideways faces carry the strata, up-facing ones stay as weathered benches
     side = 1.0 - smoothstep(0.3, 0.6, np.abs(nr[:, 2]))
-    disp = s * (0.05 * base + 0.007 * fine + 0.03 * plate * plate_k - 0.04 * crack - 0.05 * groove * side)
+    # second, finer fracture network (hairline joints between the big plates) and solution pits
+    edge2 = np.empty(len(P))
+    pit = np.empty(len(P))
+    for i, p in enumerate(P):
+        v = Vector(p)
+        q = v * 3.4 + off * 1.3 + noise.noise_vector(v * 2.1 + off) * 0.35
+        d, _ = noise.voronoi(q, distance_metric="DISTANCE")
+        edge2[i] = d[1] - d[0]
+        d, _ = noise.voronoi(v * 9.0 + off * 0.7, distance_metric="DISTANCE")
+        pit[i] = d[0]
+    hair_mask = smoothstep(-0.3, 0.9, fbm(P, 0.7, off + Vector((8, 3, 1)), 2))
+    hair = (1.0 - smoothstep(0.0, 0.035, edge2)) * hair_mask
+    pit_mask = smoothstep(0.2, 1.2, fbm(P, 0.5, off + Vector((1, 5, 7)), 2))
+    pits = (1.0 - smoothstep(0.0, 0.28, pit)) * pit_mask
+    grain = fbm(P, 7.5, off + Vector((2, 2, 6)), 3)
+    disp = s * (0.05 * base + 0.007 * fine + 0.03 * plate * plate_k - 0.04 * crack - 0.05 * groove * side
+                - 0.014 * hair - 0.012 * pits + 0.0025 * grain)
     co += nr * disp[:, None]
     set_co(high.data, co)
 
@@ -305,10 +355,30 @@ def build(spec):
     col *= (1 - 0.22 * crack)[:, None]
     col *= (1 - 0.15 * groove * side)[:, None]
     col *= (1 + 0.1 * np.clip(nr[:, 2], 0, 1))[:, None]
-    rough = np.clip(0.8 + 0.06 * np.clip(fine, -2, 2) + 0.12 * crack - 0.05 * np.clip(nr[:, 2], 0, 1), 0.55, 1.0)
+    # grime settles in the hairline joints and pits; exposed ridges are bleached a little
+    cav_f, cav_b = cavity(high.data, co, nr)
+    crevice = np.clip(smoothstep(0.05, 0.6, cav_f) * 0.6 + smoothstep(0.05, 0.5, cav_b) * 0.6, 0, 1)
+    ridge = smoothstep(0.08, 0.6, -cav_b)
+    col *= (1 - 0.3 * hair - 0.18 * pits - 0.35 * crevice + 0.16 * ridge)[:, None]
+    # tide stain: the lowest band (always at or under the waterline) is darker and browner;
+    # salt-white tide marks streak a little above it
+    hrel = (co[:, 2] - bmin.z) / (bmax.z - bmin.z)
+    tide_edge = 0.11 + 0.03 * fbm(P, 1.4, off + Vector((7, 7, 1)), 2)
+    tide = 1.0 - smoothstep(tide_edge - 0.04, tide_edge + 0.02, hrel)
+    col = col * (1 - 0.45 * tide)[:, None] + (np.array([0.02, 0.016, 0.008]) * tide[:, None])
+    salt = smoothstep(0.012, 0.0, np.abs(hrel - tide_edge - 0.05)) * smoothstep(0.3, 0.9, fbm(P, 2.2, off + Vector((3, 6, 2)), 2))
+    col += (0.08 * salt)[:, None]
+    rough = np.clip(0.8 + 0.06 * np.clip(fine, -2, 2) + 0.12 * crack + 0.08 * crevice - 0.08 * ridge
+                    - 0.05 * np.clip(nr[:, 2], 0, 1) - 0.2 * tide, 0.45, 1.0)
     attr = high.data.color_attributes.new("rockdata", "FLOAT_COLOR", "POINT")
     data = np.concatenate([np.clip(col, 0, 1), rough[:, None]], axis=1)
     attr.data.foreach_set("color", data.reshape(-1).astype(np.float32))
+    # crevice mask for the runtime moss (baked into the ORM blue channel)
+    cav_attr = high.data.color_attributes.new("cavity", "FLOAT_COLOR", "POINT")
+    cav = np.clip(crevice * 0.8 + 0.5 * hair + 0.3 * pits, 0, 1)
+    cdat = np.repeat(cav[:, None], 4, axis=1)
+    cdat[:, 3] = 1
+    cav_attr.data.foreach_set("color", cdat.reshape(-1).astype(np.float32))
     for p in high.data.polygons:
         p.use_smooth = True
 
@@ -317,6 +387,7 @@ def build(spec):
     low_me.name = name
     low = link(bpy.data.objects.new(name, low_me))
     low.data.color_attributes.remove(low.data.color_attributes["rockdata"])
+    low.data.color_attributes.remove(low.data.color_attributes["cavity"])
     tris = sum(len(p.vertices) - 2 for p in low.data.polygons)
     m = low.modifiers.new("dec", "DECIMATE")
     m.decimate_type = "COLLAPSE"
@@ -337,11 +408,35 @@ def build(spec):
         p.use_smooth = True
     print(f"[rocks] {name}: low {sum(len(p.vertices) - 2 for p in low.data.polygons)} tris")
 
+    # UVs: unwrapping the noisy low mesh directly shatters into hundreds of tiny islands
+    # (seams everywhere, wasted texels). Unwrap a laplacian-smoothed copy with the same
+    # topology instead (large, clean islands), copy its UVs over, then rescale the islands to
+    # the real surface area and pack.
+    proxy = link(bpy.data.objects.new(name + "_uvproxy", low.data.copy()))
+    pco, _ = mesh_arrays(proxy.data)
+    pev = edge_pairs(proxy.data)
+    for _ in range(30):
+        pco = pco * 0.4 + neighbour_mean(pco, pev, len(pco)) * 0.6
+    set_co(proxy.data, pco)
+    select_only(proxy)
+    bpy.ops.object.mode_set(mode="EDIT")
+    bpy.ops.mesh.select_all(action="SELECT")
+    bpy.ops.uv.smart_project(angle_limit=math.radians(52), island_margin=0.004, area_weight=0.0)
+    bpy.ops.object.mode_set(mode="OBJECT")
+    uvs = np.empty(len(proxy.data.loops) * 2)
+    proxy.data.uv_layers.active.data.foreach_get("uv", uvs)
+    proxy_me = proxy.data
+    bpy.data.objects.remove(proxy)
+    bpy.data.meshes.remove(proxy_me)
+    while low.data.uv_layers:
+        low.data.uv_layers.remove(low.data.uv_layers[0])
+    low.data.uv_layers.new(name="UVMap").data.foreach_set("uv", uvs)
     select_only(low)
     bpy.ops.object.mode_set(mode="EDIT")
     bpy.ops.mesh.select_all(action="SELECT")
-    bpy.ops.uv.smart_project(angle_limit=math.radians(60), island_margin=0.006, area_weight=0.6)
-    bpy.ops.uv.pack_islands(margin=0.004, rotate=True)
+    bpy.ops.uv.select_all(action="SELECT")
+    bpy.ops.uv.average_islands_scale()
+    bpy.ops.uv.pack_islands(margin=0.003, rotate=True)
     bpy.ops.object.mode_set(mode="OBJECT")
 
     # 5. bake
@@ -367,16 +462,68 @@ def build(spec):
     mul.inputs["Factor"].default_value = 1.0
     nt.links.new(att.outputs["Color"], mul.inputs["A"])
     nt.links.new(ramp.outputs["Result"], mul.inputs["B"])
-    nt.links.new(mul.outputs["Result"], bsdf.inputs["Base Color"])
+    # mineral grain: sparse light (feldspar / quartz) and dark (mafic) flecks at texel scale
+    grain_n = nt.nodes.new("ShaderNodeTexNoise")
+    grain_n.inputs["Scale"].default_value = 70.0 / s
+    grain_n.inputs["Detail"].default_value = 1.0
+    grain_n.inputs["Roughness"].default_value = 0.4
+    nt.links.new(tc.outputs["Object"], grain_n.inputs["Vector"])
+    fleck = nt.nodes.new("ShaderNodeMapRange")
+    fleck.interpolation_type = "SMOOTHSTEP"
+    fleck.inputs["From Min"].default_value = 0.3
+    fleck.inputs["From Max"].default_value = 0.7
+    fleck.inputs["To Min"].default_value = 0.8
+    fleck.inputs["To Max"].default_value = 1.22
+    nt.links.new(grain_n.outputs["Fac"], fleck.inputs["Value"])
+    mul2 = nt.nodes.new("ShaderNodeMix")
+    mul2.data_type = "RGBA"
+    mul2.blend_type = "MULTIPLY"
+    mul2.inputs["Factor"].default_value = 1.0
+    nt.links.new(mul.outputs["Result"], mul2.inputs["A"])
+    nt.links.new(fleck.outputs["Result"], mul2.inputs["B"])
+    # thin pale quartz veins along a warped noise isoline
+    vein_n = nt.nodes.new("ShaderNodeTexNoise")
+    vein_n.inputs["Scale"].default_value = 0.9 / s
+    vein_n.inputs["Detail"].default_value = 6.0
+    vein_n.inputs["Distortion"].default_value = 0.6
+    nt.links.new(tc.outputs["Object"], vein_n.inputs["Vector"])
+    vd = nt.nodes.new("ShaderNodeMath")
+    vd.operation = "SUBTRACT"
+    vd.inputs[1].default_value = 0.5
+    nt.links.new(vein_n.outputs["Fac"], vd.inputs[0])
+    va = nt.nodes.new("ShaderNodeMath")
+    va.operation = "ABSOLUTE"
+    nt.links.new(vd.outputs[0], va.inputs[0])
+    vm = nt.nodes.new("ShaderNodeMapRange")
+    vm.interpolation_type = "SMOOTHSTEP"
+    vm.inputs["From Min"].default_value = 0.006
+    vm.inputs["From Max"].default_value = 0.0
+    vm.inputs["To Min"].default_value = 0.0
+    vm.inputs["To Max"].default_value = 0.4
+    nt.links.new(va.outputs[0], vm.inputs["Value"])
+    vein = nt.nodes.new("ShaderNodeMix")
+    vein.data_type = "RGBA"
+    nt.links.new(vm.outputs["Result"], vein.inputs["Factor"])
+    nt.links.new(mul2.outputs["Result"], vein.inputs["A"])
+    vein.inputs["B"].default_value = (0.55, 0.54, 0.52, 1)
+    nt.links.new(vein.outputs["Result"], bsdf.inputs["Base Color"])
     nt.links.new(att.outputs["Alpha"], bsdf.inputs["Roughness"])
+    # emission path, only used to bake the crevice mask
+    cav_att = nt.nodes.new("ShaderNodeAttribute")
+    cav_att.attribute_name = "cavity"
+    cav_em = nt.nodes.new("ShaderNodeEmission")
+    nt.links.new(cav_att.outputs["Color"], cav_em.inputs["Color"])
+    h_out = next(n for n in nt.nodes if n.type == "OUTPUT_MATERIAL")
     high.data.materials.append(hmat)
 
     lmat = bpy.data.materials.new(name)
     lnt = lmat.node_tree
     low.data.materials.append(lmat)
 
+    T = spec.get("tex", TEX)
+
     def new_img(kind, colour):
-        img = bpy.data.images.new(f"{name}_{kind}", TEX, TEX, alpha=False, float_buffer=False)
+        img = bpy.data.images.new(f"{name}_{kind}", T, T, alpha=False, float_buffer=False)
         img.colorspace_settings.name = "sRGB" if colour else "Non-Color"
         return img
 
@@ -401,15 +548,27 @@ def build(spec):
     bake("AO", img_ao)
     scene.cycles.samples = 64
     bake("ROUGHNESS", img_rgh)
+    img_cav = new_img("cavity", False)
+    bsdf_link = bsdf.outputs[0].links[0]
+    nt.links.remove(bsdf_link)
+    nt.links.new(cav_em.outputs[0], h_out.inputs["Surface"])
+    scene.cycles.samples = 16
+    bake("EMIT", img_cav)
+    nt.links.new(bsdf.outputs[0], h_out.inputs["Surface"])
+    scene.cycles.samples = 64
 
-    # pack ORM: R = AO, G = roughness, B = metal (0)
-    ao = np.empty(TEX * TEX * 4, dtype=np.float32)
+    # pack ORM: R = AO, G = roughness, B = crevice mask (the runtime material has no metalness
+    # map, so the blue channel is free; Rocks.tsx reads it for the moss)
+    ao = np.empty(T * T * 4, dtype=np.float32)
     img_ao.pixels.foreach_get(ao)
-    rg = np.empty(TEX * TEX * 4, dtype=np.float32)
+    rg = np.empty(T * T * 4, dtype=np.float32)
     img_rgh.pixels.foreach_get(rg)
-    orm = np.zeros((TEX * TEX, 4), dtype=np.float32)
+    cv = np.empty(T * T * 4, dtype=np.float32)
+    img_cav.pixels.foreach_get(cv)
+    orm = np.zeros((T * T, 4), dtype=np.float32)
     orm[:, 0] = 0.25 + 0.75 * ao.reshape(-1, 4)[:, 0]  # keep crevices dark but never black
     orm[:, 1] = rg.reshape(-1, 4)[:, 0]
+    orm[:, 2] = cv.reshape(-1, 4)[:, 0]
     orm[:, 3] = 1
     img_orm = new_img("orm", False)
     img_orm.pixels.foreach_set(orm.reshape(-1))
@@ -418,6 +577,7 @@ def build(spec):
         img.pack()
     bpy.data.images.remove(img_ao)
     bpy.data.images.remove(img_rgh)
+    bpy.data.images.remove(img_cav)
 
     # export material: base colour, normal, ORM (glTF occlusion via the glTF Material Output group)
     lnt.nodes.clear()
@@ -437,7 +597,9 @@ def build(spec):
     sep = lnt.nodes.new("ShaderNodeSeparateColor")
     lnt.links.new(t_orm.outputs["Color"], sep.inputs["Color"])
     lnt.links.new(sep.outputs["Green"], bs.inputs["Roughness"])
-    bs.inputs["Metallic"].default_value = 0.0
+    # linked so the exporter keeps the blue channel (crevice mask) in the shipped ORM texture;
+    # Rocks.tsx never uses it as metalness (its material has no metalness map)
+    lnt.links.new(sep.outputs["Blue"], bs.inputs["Metallic"])
     grp = bpy.data.node_groups.get("glTF Material Output")
     if grp is None:
         grp = bpy.data.node_groups.new("glTF Material Output", "ShaderNodeTree")
@@ -507,6 +669,12 @@ COLS = 4
 for i, n in enumerate(names):
     bpy.ops.import_scene.gltf(filepath=os.path.join(OUT_DIR, n + ".glb"))
     for o in [o for o in bpy.context.selected_objects if o.type == "MESH"]:
+        for m in o.data.materials:  # the ORM blue channel is the crevice mask, not metalness
+            b = next((nd for nd in m.node_tree.nodes if nd.type == "BSDF_PRINCIPLED"), None)
+            if b:
+                for lk in list(b.inputs["Metallic"].links):
+                    m.node_tree.links.remove(lk)
+                b.inputs["Metallic"].default_value = 0.0
         dims = o.dimensions
         k = 2.2 / max(dims.x, dims.y)
         o.scale = (k, k, k)
@@ -526,11 +694,12 @@ cam.location = target + Vector((0, -12, 3.6))
 cam.rotation_euler = (target - cam.location).to_track_quat("-Z", "Y").to_euler()
 scene.camera = cam
 sun = bpy.data.objects.new("sun", bpy.data.lights.new("sun", "SUN"))
-sun.data.energy = 3.5
-sun.rotation_euler = (math.radians(50), math.radians(10), math.radians(-35))
+sun.data.energy = 3.0
+sun.data.angle = math.radians(8)
+sun.rotation_euler = (math.radians(55), math.radians(10), math.radians(-25))
 scene.collection.objects.link(sun)
 world = bpy.data.worlds.new("w")
-world.color = (0.05, 0.05, 0.06)
+world.color = (0.16, 0.16, 0.17)
 scene.world = world
 scene.render.engine = "BLENDER_EEVEE"
 scene.render.resolution_x = 2000

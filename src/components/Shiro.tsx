@@ -8,7 +8,9 @@ import { sceneStore } from '../scene/store'
 /* ─────────────────────────────────────────────────────────────────────────────
    Distant Himeji-style castle on its wooded hill, across the water behind the torii.
    Built in Blender (scripts/blender/build_shiro.py). COLOR_0: R = baked AO,
-   G = night window mask, B = per-part tone variation.
+   G = night window mask, B = per-part tone variation. Surface detail (tile rows,
+   dressed stone, stained plaster, leafy canopy) is procedural in the shader, from
+   the model-space position and normal.
 
    The castle adapts to the scene: its own light and haze follow sceneStore.day and
    the live scene fog colour, so it always reads as a far, fogged silhouette.
@@ -26,6 +28,8 @@ const PALETTE: Record<Kind, [string, string]> = {
   foliage: ['#111411', '#5f7258'],
   ground: ['#131211', '#867f6c'],
 }
+/** Procedural detail pattern per surface (see the fragment shader). */
+const KIND_INDEX: Record<Kind, number> = { plaster: 0, roof: 1, stone: 2, window: 3, wood: 4, foliage: 5, ground: 6 }
 /** How strongly each surface catches the crimson rim at night. */
 const RIM: Record<Kind, number> = { plaster: 0.3, roof: 1.1, stone: 0.18, window: 0, wood: 0.12, foliage: 0.05, ground: 0.03 }
 
@@ -43,11 +47,18 @@ const vertexShader = /* glsl */ `
   varying vec3 vN;
   varying vec3 vWorld;
   varying vec4 vCol;
+  varying vec3 vObj;
+  varying vec3 vNObj;
+  varying vec3 vTgW;
   void main() {
     vec4 wp = modelMatrix * vec4(position, 1.0);
     vWorld = wp.xyz;
     vN = normalize(mat3(modelMatrix) * normal);
     vCol = color;
+    vObj = position;
+    vNObj = normal;
+    // horizontal tangent across the slope / along the wall (tile rows, stone courses)
+    vTgW = normalize(mat3(modelMatrix) * vec3(-normal.z, 0.0, normal.x) + vec3(1e-5));
     gl_Position = projectionMatrix * viewMatrix * wp;
   }
 `
@@ -68,9 +79,20 @@ const fragmentShader = /* glsl */ `
   uniform float uFogDensity;
   uniform float uWaterY;
   uniform float uTime;
+  uniform float uKind;
   varying vec3 vN;
   varying vec3 vWorld;
   varying vec4 vCol;
+  varying vec3 vObj;
+  varying vec3 vNObj;
+  varying vec3 vTgW;
+
+  float h21(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+  float vn(vec2 p) {
+    vec2 i = floor(p), f = fract(p);
+    f = f * f * (3.0 - 2.0 * f);
+    return mix(mix(h21(i), h21(i + vec2(1.0, 0.0)), f.x), mix(h21(i + vec2(0.0, 1.0)), h21(i + vec2(1.0, 1.0)), f.x), f.y);
+  }
 
   void main() {
     vec3 n = normalize(vN);
@@ -78,6 +100,46 @@ const fragmentShader = /* glsl */ `
     vec3 V = normalize(cameraPosition - vWorld);
     float ao = mix(0.3, 1.0, vCol.r);
     vec3 alb = mix(uNightBase, uDayBase, uDay) * (0.88 + 0.24 * vCol.b);
+
+    // surface detail (model units; faded out once a feature spans only a few pixels, so the
+    // far castle never shimmers): tiled roofs, dressed ishigaki stone, stained plaster, canopy
+    vec3 no = normalize(vNObj);
+    float fw = length(fwidth(vObj));
+    vec2 hz = no.xz;
+    float hl = length(hz);
+    vec2 tg = hl > 1e-3 ? vec2(-hz.y, hz.x) / hl : vec2(1.0, 0.0);
+    float along = dot(vObj.xz, tg);
+    float detail = 1.0;
+    if (uKind > 0.5 && uKind < 1.5) {
+      // hongawara rows running down the slope, cap tiles catching the light, course lines
+      float k = (1.0 - smoothstep(0.06, 0.16, fw / 0.3)) * smoothstep(0.08, 0.3, hl) * step(0.05, no.y);
+      float u = along / 0.3;
+      float s = sin(u * 6.2831853);
+      float course = smoothstep(0.82, 1.0, fract(vObj.y / 0.24 + 0.15 * h21(vec2(floor(u), 3.0))));
+      detail = mix(1.0, (0.86 + 0.26 * smoothstep(0.1, 0.9, s) - 0.2 * smoothstep(-0.2, -0.9, s)) * (1.0 - 0.22 * course)
+                        * (0.9 + 0.2 * vn(vec2(floor(u), vObj.y * 0.7))), k);
+      n = normalize(n + vTgW * cos(u * 6.2831853) * 0.5 * k);
+    } else if (uKind > 1.5 && uKind < 2.5) {
+      // coursed rough-dressed blocks with dark joints and per-stone tone
+      float k = 1.0 - smoothstep(0.08, 0.2, fw / 0.45);
+      float row = floor(vObj.y / 0.42);
+      float bx = (along + h21(vec2(row, 1.0)) * 0.9) / (0.55 + 0.35 * h21(vec2(row, 7.0)));
+      vec2 cell = vec2(floor(bx), row);
+      vec2 f = vec2(fract(bx), fract(vObj.y / 0.42));
+      float joint = 1.0 - smoothstep(0.0, 0.07, min(min(f.x, 1.0 - f.x), min(f.y, 1.0 - f.y) * 1.3));
+      detail = mix(1.0, (0.78 + 0.4 * h21(cell)) * (1.0 - 0.55 * joint) * (0.9 + 0.2 * vn(vObj.xy * 6.0 + vObj.z * 3.0)), k);
+    } else if (uKind < 0.5) {
+      // plaster: soft mottling and rain stains running down from the eaves
+      float k = 1.0 - smoothstep(0.1, 0.4, fw);
+      float streak = vn(vec2(along * 5.0, vObj.y * 0.35));
+      detail = mix(1.0, (0.94 + 0.08 * vn(vObj.xz * 1.7 + vObj.y)) * (1.0 - 0.14 * smoothstep(0.55, 0.85, streak)), k);
+    } else if (uKind > 4.5 && uKind < 5.5) {
+      // foliage: leafy clumps instead of flat blobs
+      float k = 1.0 - smoothstep(0.15, 0.6, fw);
+      float leaf = vn(vObj.xz * 2.6 + vObj.y * 1.9) * 0.6 + vn(vObj.xy * 6.5 + vObj.z * 4.1) * 0.4;
+      detail = mix(1.0, 0.7 + 0.6 * leaf, k);
+    }
+    alb *= detail;
 
     float diff = max(dot(n, uLightDir), 0.0);
     float sky = 0.55 + 0.45 * n.y;
@@ -147,6 +209,7 @@ export function Shiro() {
             uDayBase: { value: new THREE.Color(day) },
             uRim: { value: RIM[kind] },
             uWindow: { value: kind === 'window' ? 1 : 0 },
+            uKind: { value: KIND_INDEX[kind] },
           },
         })
         made.push(mat)
