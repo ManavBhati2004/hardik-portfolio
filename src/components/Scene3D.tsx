@@ -1,4 +1,4 @@
-import { Suspense, useEffect, useMemo, useRef, useState } from 'react'
+import { Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { useProgress } from '@react-three/drei'
 import * as THREE from 'three'
@@ -30,6 +30,9 @@ export interface Scene3DProps {
   cursorRef: CursorRef
 }
 
+/** How far (world units) the camera sits back while the preloader mist is closed. */
+const PRELOAD_DOLLY = 0.9
+
 /* ─── Camera journey: damped travel along a Catmull-Rom path through the section keys ─── */
 function CameraRig() {
   const camera = useThree((s) => s.camera)
@@ -46,7 +49,7 @@ function CameraRig() {
     }),
     [portrait]
   )
-  const s = useRef({ t: 0, pos: new THREE.Vector3(), target: new THREE.Vector3() })
+  const s = useRef({ t: 0, pos: new THREE.Vector3(), target: new THREE.Vector3(), fwd: new THREE.Vector3() })
 
   useEffect(() => {
     camera.layers.enable(LAYER_NO_REFLECT)
@@ -64,6 +67,14 @@ function CameraRig() {
     const u = cameraTToU(st.t)
     curves.pos.getPoint(u, st.pos)
     curves.target.getPoint(u, st.target)
+    // preloader: the camera starts a little back and drifts forward through the parting mist
+    // (eased to zero offset by the time the fog has opened; none with reduced motion)
+    const part = sceneStore.fogPart
+    if (part < 1 && !sceneStore.reducedMotion) {
+      const k = 1 - part
+      st.fwd.subVectors(st.target, st.pos).normalize()
+      st.pos.addScaledVector(st.fwd, -PRELOAD_DOLLY * k * k * (3 - 2 * k))
+    }
     camera.position.copy(st.pos)
     camera.lookAt(st.target)
     camera.updateMatrixWorld()
@@ -71,42 +82,116 @@ function CameraRig() {
   return null
 }
 
-/* ─── After Suspense resolves: compile every shader, then announce "ready" ─── */
+/* ─── After Suspense resolves: compile, upload and prime everything, then announce "ready" ───
+   The loaded content stays hidden from the frame loop until its shaders are linked: drawing a
+   material whose program is still linking blocks the main thread (it was one 3.4 s task).
+   - compile per object group with KHR_parallel_shader_compile, yielding a frame between groups
+   - compile with a half-float target bound: the scene is drawn into the composer's linear
+     buffers, and the output colour space is part of the program key (compiling against the
+     canvas would build the sRGB variants nobody uses)
+   - upload every texture (gl.initTexture), then render the scene once off-screen so the
+     shadow map and its depth programs exist before the reveal
+   Progress: asset loading counts for 85 %, this warm-up fills the rest (no idle at 99). */
+const nextFrame = () => new Promise<void>((r) => requestAnimationFrame(() => r()))
+
+function collectTextures(root: THREE.Object3D) {
+  const out = new Set<THREE.Texture>()
+  const take = (v: unknown) => {
+    if (v && (v as THREE.Texture).isTexture && !(v as THREE.Texture).isRenderTargetTexture) out.add(v as THREE.Texture)
+  }
+  root.traverse((o) => {
+    const mats = (o as THREE.Mesh).material
+    if (!mats) return
+    for (const m of Array.isArray(mats) ? mats : [mats]) {
+      for (const v of Object.values(m)) take(v)
+      const uniforms = (m as THREE.ShaderMaterial).uniforms
+      if (uniforms) for (const u of Object.values(uniforms)) take(u?.value)
+    }
+  })
+  return [...out]
+}
+
+/** Name of the group that wraps everything Suspense loads (WarmUp holds it back). */
+const CONTENT = 'scene-content'
+
 function WarmUp() {
   const gl = useThree((s) => s.gl)
   const scene = useThree((s) => s.scene)
   const camera = useThree((s) => s.camera)
-  useEffect(() => {
+  // layout effect: runs in the same commit that mounts the content, before the next frame draws it
+  useLayoutEffect(() => {
+    const group = scene.getObjectByName(CONTENT)
+    if (!group) return
     let cancelled = false
-    const run = async () => {
-      // compile everything, including what is hidden right now (the other theme's katana and
-      // its saya), so toggling the theme never stalls on a first-time shader compile
-      const hidden: THREE.Object3D[] = []
-      scene.traverse((o) => {
-        if (!o.visible) {
-          hidden.push(o)
-          o.visible = true
-        }
-      })
+    group.visible = false
+    const rt = new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, depthBuffer: true })
+    const report = (p: number) => void (sceneStore.loadProgress = Math.max(sceneStore.loadProgress, p))
+    const bound = <T,>(fn: () => T) => {
+      const prev = gl.getRenderTarget()
+      gl.setRenderTarget(rt)
       try {
-        if ('compileAsync' in gl) await gl.compileAsync(scene, camera)
-        else (gl as THREE.WebGLRenderer).compile(scene, camera)
-      } catch {
-        /* compile is an optimisation only */
+        return fn()
+      } finally {
+        gl.setRenderTarget(prev)
       }
-      for (const o of hidden) o.visible = false
-      // two frames so textures upload before the reveal
-      requestAnimationFrame(() =>
-        requestAnimationFrame(() => {
-          if (cancelled) return
-          sceneStore.ready = true
-          emitSceneEvent('ready')
-        })
-      )
+    }
+    const run = async () => {
+      report(85)
+      await nextFrame()
+      // 1. shaders: queue one object group per frame (keeps each main-thread slice short),
+      //    without waiting in between, so the GPU process links them in parallel
+      const parts = [...group.children]
+      const tCompile = performance.now()
+      let linked = 0
+      const pending: Promise<unknown>[] = []
+      for (let i = 0; i < parts.length && !cancelled; i++) {
+        try {
+          const job = bound(() => gl.compileAsync(parts[i], camera, scene))
+          pending.push(
+            job.catch(() => undefined).then(() => {
+              linked++
+              report(85 + (9 * linked) / parts.length)
+            })
+          )
+        } catch {
+          /* compile is an optimisation only */
+        }
+        await nextFrame()
+      }
+      await Promise.all(pending)
+      performance.measure(`pl:compile ×${parts.length}`, { start: tCompile })
+      // 2. textures: upload within a ~10 ms budget per frame
+      const tTex = performance.now()
+      const textures = collectTextures(group)
+      let slice = performance.now()
+      for (let i = 0; i < textures.length && !cancelled; i++) {
+        gl.initTexture(textures[i])
+        if (performance.now() - slice > 10) {
+          report(94 + (5 * (i + 1)) / textures.length)
+          await nextFrame()
+          slice = performance.now()
+        }
+      }
+      if (cancelled) return
+      performance.measure(`pl:textures ×${textures.length}`, { start: tTex })
+      // 3. one off-screen draw: shadow map, depth programs, remaining uniforms
+      group.visible = true
+      const tDraw = performance.now()
+      bound(() => gl.render(scene, camera))
+      performance.measure('pl:prime draw', { start: tDraw })
+      report(99)
+      await nextFrame()
+      await nextFrame()
+      if (cancelled) return
+      report(100)
+      sceneStore.ready = true
+      emitSceneEvent('ready')
     }
     run()
     return () => {
       cancelled = true
+      group.visible = true
+      rt.dispose()
     }
   }, [gl, scene, camera])
   return null
@@ -117,7 +202,9 @@ function ProgressReporter() {
   const progress = useProgress((s) => s.progress)
   const active = useProgress((s) => s.active)
   useEffect(() => {
-    sceneStore.loadProgress = active ? Math.min(99, progress) : progress
+    // asset loading is the first 85 %; WarmUp fills the rest
+    const p = (active ? Math.min(99, progress) : progress) * 0.85
+    sceneStore.loadProgress = Math.max(sceneStore.loadProgress, p)
   }, [progress, active])
   return null
 }
@@ -224,16 +311,19 @@ function SceneContents({ cursorRef, quality }: { cursorRef: CursorRef; quality: 
       <FogVeil />
 
       <Suspense fallback={null}>
-        <SkyBackground />
-        <RedMoon />
-        <Katana cursorRef={cursorRef} />
-        <Water cursorRef={cursorRef} />
-        <BlossomBranch />
-        <FallingLeaves />
-        <Environment />
-        <Shiro />
-        <GroundFog />
-        <HorizonEffect />
+        {/* one wrapper so WarmUp can hold the content back until it is compiled */}
+        <group name={CONTENT}>
+          <SkyBackground />
+          <RedMoon />
+          <Katana cursorRef={cursorRef} />
+          <Water cursorRef={cursorRef} />
+          <BlossomBranch />
+          <FallingLeaves />
+          <Environment />
+          <Shiro />
+          <GroundFog />
+          <HorizonEffect />
+        </group>
         <WarmUp />
       </Suspense>
 

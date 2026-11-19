@@ -10,18 +10,45 @@
   background-color: rgb(var(--bg-rgb));
   pointer-events: none;
 }
+/* the mark and counter sit inside the mist, not on top of it: a slight defocus, a soft halo
+   of their own light, and a slow drift as the bank rolls past (transform only: the reveal
+   tweens opacity inline; a filter tween would re-raster every frame) */
+.preloader-mark,
+.preloader-count {
+  filter: blur(0.5px);
+  will-change: opacity;
+}
 .preloader-mark {
   font-family: var(--font-jp);
   font-weight: 300;
   font-size: clamp(28px, 3vw, 44px);
-  color: rgba(var(--fg-rgb), 0.2);
+  color: rgba(var(--fg-rgb), 0.26);
   line-height: 1;
+  text-shadow:
+    0 0 14px rgba(var(--fg-rgb), 0.22),
+    0 0 42px rgba(var(--fg-rgb), 0.12);
+  animation: preloader-breathe 4.8s ease-in-out infinite;
 }
 .preloader-count {
   font-family: var(--font-body);
   font-size: 11px;
   letter-spacing: 0.5em;
   padding-left: 0.5em;
-  color: rgba(var(--fg-rgb), 0.45);
+  color: rgba(var(--fg-rgb), 0.5);
   font-variant-numeric: tabular-nums;
+  text-shadow: 0 0 10px rgba(var(--fg-rgb), 0.25);
+}
+@keyframes preloader-breathe {
+  0%,
+  100% {
+    transform: translateY(0) scale(1);
+  }
+  50% {
+    transform: translateY(-3px) scale(1.015);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .preloader-mark {
+    animation: none;
+  }
 }

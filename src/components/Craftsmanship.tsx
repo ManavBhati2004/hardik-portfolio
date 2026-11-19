@@ -4,16 +4,16 @@ import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import { CRAFT_INTRO, DISCIPLINES, FILLER_CLIPS, SEQUENCE, TOOLS, TRACKS, type TrackId } from '../data/craft'
 import { setupReveals } from '../motion/sections'
 import { sceneStore } from '../scene/store'
-import { drawLoop, levels, Vectorscope } from './craftMonitor'
+import { drawLoop } from './craftMonitor'
 import './Craftsmanship.css'
 
 gsap.registerPlugin(ScrollTrigger)
 
 /* 02 — Craftsmanship. Left: label + ink-revealed 技, heading, intro, tools.
-   Right: a live edit timeline (NLE). Scroll scrubs the playhead; when the scroll rests
-   the sequence plays in real time through the live clip and loops it. The clip under the
-   playhead drives the program monitor, vectorscope and audio meter. Hover / focus / tap on
-   a clip jumps the playhead there. Per-frame work is transform / text / canvas only. */
+   Right: two liquid-glass slabs floating over the scene — the program monitor and the edit
+   timeline. Scroll scrubs the playhead; when the scroll rests the sequence plays in real time
+   through the live clip and loops it. The clip under the playhead drives the monitor.
+   Hover / focus / tap on a clip jumps the playhead there. Per-frame work is transform / canvas only. */
 
 const DUR = SEQUENCE.duration
 const FPS = SEQUENCE.fps
@@ -22,10 +22,6 @@ const ROW = (id: TrackId) => TRACKS.findIndex((t) => t.id === id)
 const KIND = (id: TrackId) => TRACKS[ROW(id)].kind
 
 const pad = (n: number) => String(n).padStart(2, '0')
-function timecode(sec: number) {
-  const f = Math.max(0, Math.floor(sec * FPS + 1e-6))
-  return `${pad(Math.floor(f / (FPS * 3600)))}:${pad(Math.floor(f / (FPS * 60)) % 60)}:${pad(Math.floor(f / FPS) % 60)}:${pad(f % FPS)}`
-}
 const short = (sec: number) => `${pad(Math.floor(sec / 60))}:${pad(Math.floor(sec) % 60)}`
 
 /** Index of the discipline clip containing t (clips are contiguous, non-overlapping). */
@@ -77,12 +73,7 @@ function EditTimeline() {
   const rootRef = useRef<HTMLDivElement>(null!)
   const timeRef = useRef<HTMLDivElement>(null!)
   const headRef = useRef<HTMLDivElement>(null!)
-  const tcRef = useRef<HTMLSpanElement>(null!)
-  const stateRef = useRef<HTMLSpanElement>(null!)
   const monitorRef = useRef<HTMLCanvasElement>(null!)
-  const scopeRef = useRef<HTMLCanvasElement>(null!)
-  const meterRefs = useRef<(HTMLSpanElement | null)[]>([])
-  const peakRefs = useRef<(HTMLSpanElement | null)[]>([])
   const clipRefs = useRef<(HTMLButtonElement | null)[]>([])
 
   const [active, setActive] = useState(0)
@@ -97,9 +88,6 @@ function EditTimeline() {
     const vertical = window.matchMedia('(max-width: 767px)')
     const monitor = monitorRef.current
     const mctx = monitor.getContext('2d', { alpha: false })!
-    const scope = scopeRef.current
-    const sctx = scope.getContext('2d', { alpha: false })!
-    const vscope = new Vectorscope()
 
     let tScroll = 0
     let lastScroll = -1
@@ -112,14 +100,6 @@ function EditTimeline() {
     let stickyFrom = -1
     let inView = false
     let monitorAcc = 1
-    let scopeAcc = 1
-    let freshScope = true
-    let lastTc = ''
-    let playing = false
-    let lastPlaying: boolean | null = null
-    const meter = [0, 0]
-    const peak = [0, 0]
-    const peakAge = [0, 0]
 
     // backing stores follow the element size (not per frame)
     const size = () => {
@@ -127,21 +107,15 @@ function EditTimeline() {
       const mw = Math.min(760, Math.round(monitor.clientWidth * dpr))
       monitor.width = Math.max(160, mw)
       monitor.height = Math.round((monitor.width * 9) / 16)
-      const s = Math.max(64, Math.round(scope.clientWidth * dpr))
-      scope.width = s
-      scope.height = s
       monitorAcc = 1
-      freshScope = true
       paintStill()
     }
     const paintStill = () => {
       const d = DISCIPLINES[lastActive]
       drawLoop(mctx, d.loop, monitor.width, monitor.height, reduced ? 1.4 : Math.max(0, shown - d.in))
-      vscope.draw(monitor, sctx, scope.width, true)
     }
     const ro = new ResizeObserver(size)
     ro.observe(monitor)
-    ro.observe(scope)
 
     // only work while the panel is on screen
     const vis = ScrollTrigger.create({
@@ -156,14 +130,18 @@ function EditTimeline() {
 
     const st = ScrollTrigger.create({ trigger: timeRef.current, start: 'top 92%', end: 'bottom 22%' })
 
+    // the fixed "02 / 04" counter sits bottom-right, right where the panes scroll past:
+    // it steps aside while they are under it
+    const hudClear = ScrollTrigger.create({
+      trigger: root,
+      start: 'top 99%',
+      end: 'bottom 84%',
+      toggleClass: { targets: document.documentElement, className: 'hud-clear' },
+    })
+
     const place = () => {
       const p = Math.min(1, Math.max(0, shown / DUR)) * 100
       headRef.current.style.transform = vertical.matches ? `translate3d(0, ${p}%, 0)` : `translate3d(${p}%, 0, 0)`
-      const code = timecode(shown)
-      if (code !== lastTc) {
-        lastTc = code
-        tcRef.current.textContent = code
-      }
       const a = clipAt(shown)
       if (a !== lastActive) {
         lastActive = a
@@ -204,7 +182,6 @@ function EditTimeline() {
       if (!reduced) {
         tScroll = Math.min(DUR - FRAME, st.progress * DUR)
         const moved = Math.abs(tScroll - lastScroll) > 1e-4
-        const prevPlay = play
         if (engagedIdx !== null) {
           // touch-pinned clip lets go once the reader scrolls on
           if (stickyFrom >= 0 && Math.abs(tScroll - stickyFrom) > 1.5) {
@@ -232,7 +209,6 @@ function EditTimeline() {
           }
         }
         lastScroll = tScroll
-        playing = play !== prevPlay
         shown += (play - shown) * (1 - Math.exp(-dt * 14))
         if (Math.abs(play - shown) < 1e-4) shown = play
       }
@@ -240,11 +216,6 @@ function EditTimeline() {
       if (shown !== prevShown) {
         prevShown = shown
         place()
-      }
-
-      if (playing !== lastPlaying) {
-        lastPlaying = playing
-        stateRef.current.dataset.state = playing ? 'play' : 'pause'
       }
 
       if (reduced) return
@@ -255,30 +226,24 @@ function EditTimeline() {
         monitorAcc = 0
         const d = DISCIPLINES[lastActive]
         drawLoop(mctx, d.loop, monitor.width, monitor.height, Math.max(0, shown - d.in))
-        scopeAcc += 1
-        if (scopeAcc >= 3) {
-          scopeAcc = 0
-          vscope.draw(monitor, sctx, scope.width, freshScope)
-          freshScope = false
-        }
-      }
-
-      // meters: fast attack, slow release, peak hold
-      const lv = playing ? levels(DISCIPLINES[lastActive].loop, shown) : [0, 0]
-      for (let c = 0; c < 2; c++) {
-        const target = lv[c]
-        meter[c] += (target - meter[c]) * (target > meter[c] ? 0.55 : 1 - Math.exp(-dt * 5))
-        if (meter[c] >= peak[c]) {
-          peak[c] = meter[c]
-          peakAge[c] = 0
-        } else if ((peakAge[c] += dt) > 0.9) peak[c] = Math.max(0, peak[c] - dt * 0.6)
-        const m = meterRefs.current[c]
-        const p = peakRefs.current[c]
-        if (m) m.style.transform = `scale3d(1, ${(1 - meter[c]).toFixed(4)}, 1)`
-        if (p) p.style.transform = `translate3d(0, ${((1 - peak[c]) * 100).toFixed(2)}%, 0)`
       }
     }
     gsap.ticker.add(tick)
+
+    // liquid glass: Chromium can refract the backdrop through an SVG filter
+    const brands = (navigator as Navigator & { userAgentData?: { brands: { brand: string }[] } }).userAgentData?.brands
+    if (brands?.some((b) => /Chromium|Google Chrome|Microsoft Edge/.test(b.brand))) root.dataset.refract = ''
+    // the caustic sheen on each pane drifts toward the pointer
+    const panes = Array.from(root.querySelectorAll<HTMLElement>('.nle-glass'))
+    const onMove = (e: PointerEvent) => {
+      if (reduced || e.pointerType !== 'mouse') return
+      for (const p of panes) {
+        const r = p.getBoundingClientRect()
+        p.style.setProperty('--mx', ((e.clientX - r.left) / r.width).toFixed(3))
+        p.style.setProperty('--my', ((e.clientY - r.top) / r.height).toFixed(3))
+      }
+    }
+    root.addEventListener('pointermove', onMove)
     const onOrient = () => place()
     vertical.addEventListener('change', onOrient)
     size()
@@ -288,7 +253,11 @@ function EditTimeline() {
     const ctx = gsap.context(() => {
       if (reduced) return
       const tl = gsap.timeline({ scrollTrigger: { trigger: root, start: 'top 82%', once: true } })
-      tl.fromTo(root, { opacity: 0, y: 40 }, { opacity: 1, y: 0, duration: 1.1, ease: 'expo.out' })
+      tl.fromTo(
+        root.querySelectorAll('.nle-glass'),
+        { opacity: 0, y: 40, scale: 0.97 },
+        { opacity: 1, y: 0, scale: 1, duration: 1.1, ease: 'expo.out', stagger: 0.14, clearProps: 'transform' }
+      )
       tl.fromTo(
         root.querySelectorAll('.nle-clip'),
         { opacity: 0, scale: 0.92 },
@@ -299,10 +268,12 @@ function EditTimeline() {
 
     return () => {
       gsap.ticker.remove(tick)
+      root.removeEventListener('pointermove', onMove)
       vertical.removeEventListener('change', onOrient)
       ro.disconnect()
       vis.kill()
       st.kill()
+      hudClear.kill()
       ctx.revert()
     }
   }, [])
@@ -316,97 +287,30 @@ function EditTimeline() {
 
   const shownIdx = engaged ?? active
   const cur = DISCIPLINES[shownIdx]
-  const curTrack = TRACKS[ROW(cur.track)]
 
   return (
     <div className="nle" ref={rootRef} data-engaged={engaged !== null || undefined}>
-      {/* header */}
-      <div className="nle-bar">
-        <span className="nle-seq">
-          <span className="nle-rec" aria-hidden="true" />
-          Seq 02 <span className="nle-dim">/</span> {SEQUENCE.name}
-        </span>
-        <span className="nle-tc-wrap">
-          <span className="nle-state" ref={stateRef} data-state="pause" aria-hidden="true" />
-          <span className="nle-tc" ref={tcRef} aria-hidden="true">
-            00:00:00:00
-          </span>
-        </span>
-        <span className="nle-meta">
-          {FPS} fps <span className="nle-dim">·</span> UHD
-        </span>
-      </div>
+      {/* liquid-glass refraction: low-frequency turbulence bends the scene seen through the panes */}
+      <svg className="nle-defs" aria-hidden="true" focusable="false">
+        <filter id="nle-refract" x="0" y="0" width="100%" height="100%" colorInterpolationFilters="sRGB">
+          <feTurbulence type="fractalNoise" baseFrequency="0.006 0.011" numOctaves="2" seed="7" result="n" />
+          <feGaussianBlur in="n" stdDeviation="2" result="nb" />
+          <feDisplacementMap in="SourceGraphic" in2="nb" scale="22" xChannelSelector="R" yChannelSelector="G" />
+        </filter>
+      </svg>
 
-      {/* monitor + scopes */}
-      <div className="nle-view">
+      {/* program monitor */}
+      <div className="nle-glass nle-view">
         <div className="nle-monitor">
           <canvas ref={monitorRef} className="nle-monitor-canvas" aria-hidden="true" />
-          <span className="nle-safe" aria-hidden="true" />
-          <span className="nle-tag nle-tag--tl">PGM</span>
-          <span className="nle-tag nle-tag--tr">{curTrack.id}</span>
-          <span className="nle-monitor-title" key={shownIdx}>
+          <span className="nle-monitor-title" key={shownIdx} aria-live="polite">
             <span>{cur.title}</span>
           </span>
-          <span className="nle-placeholder">Placeholder loop · footage soon</span>
         </div>
-        <div className="nle-scopes" aria-hidden="true">
-          <div className="nle-scope">
-            <canvas ref={scopeRef} className="nle-scope-canvas" />
-            <span className="nle-scope-label">Vectorscope</span>
-          </div>
-          <div className="nle-meter">
-            <div className="nle-meter-scale">
-              {['0', '-6', '-12', '-24', '-48'].map((d) => (
-                <span key={d}>{d}</span>
-              ))}
-            </div>
-            {[0, 1].map((c) => (
-              <div className="nle-meter-ch" key={c}>
-                <span className="nle-meter-fill" />
-                <span
-                  className="nle-meter-mask"
-                  ref={(el) => {
-                    meterRefs.current[c] = el
-                  }}
-                />
-                <span
-                  className="nle-meter-peak"
-                  ref={(el) => {
-                    peakRefs.current[c] = el
-                  }}
-                >
-                  <i />
-                </span>
-                <span className="nle-meter-lbl">{c ? 'R' : 'L'}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {/* inspector — the live / engaged clip's line */}
-      <div className="nle-inspector" aria-live="polite">
-        <span className={`nle-chip nle-chip--${curTrack.kind}`}>{curTrack.id}</span>
-        <div className="nle-insp-text" key={shownIdx}>
-          <span className="nle-insp-title">
-            <span>{cur.title}</span>
-          </span>
-          <span className="nle-insp-desc">
-            <span>{cur.description}</span>
-          </span>
-        </div>
-        <span className="nle-io" aria-hidden="true">
-          <span>
-            <b>IN</b> {timecode(cur.in)}
-          </span>
-          <span>
-            <b>OUT</b> {timecode(cur.out)}
-          </span>
-        </span>
       </div>
 
       {/* timeline */}
-      <div className="nle-tl">
+      <div className="nle-glass nle-tl">
         <div className="nle-heads" aria-hidden="true">
           <span className="nle-head nle-head--ruler" />
           {TRACKS.map((t) => (

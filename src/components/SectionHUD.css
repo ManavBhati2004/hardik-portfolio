@@ -11,7 +11,11 @@
   font-family: var(--font-body);
   font-size: clamp(12px, 0.82vw, 14px);
   color: var(--bone-muted);
+  transition: opacity 0.45s var(--ease-out-quart, ease), filter 0.45s;
 }
+/* a pane is scrolling under the counter (set by Craftsmanship) */
+/* (!important: the intro timeline leaves an inline opacity on the HUD) */
+.hud-clear .hud { opacity: 0 !important; filter: blur(4px); }
 .hud-count { display: inline-flex; align-items: center; gap: 0.35em; }
 .hud-digits {
   position: relative;
